@@ -3,7 +3,7 @@ import { Text } from 'react-native';
 
 const OrderHistoryScreen = () => {
 	return (
-		<Text>Order History Screen</Text>
+		<Text>Nothing to see here!!</Text>
 	)
 }
 

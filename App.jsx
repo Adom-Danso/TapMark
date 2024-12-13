@@ -11,10 +11,11 @@ const Stack = createNativeStackNavigator()
 
 const SafeArea = styled.SafeAreaView`
   flex: 1;
-  padding-top: ${StatusBar.currentHeight};
-  background-color: white;
+  padding-top: ${StatusBar.currentHeight}px;
+  background-color: #4a4b4d;
 `
-
+// #444950
+// #4a4b4d
 
 export default function App({navigation}) {
 

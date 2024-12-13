@@ -3,7 +3,7 @@ import { Text } from 'react-native';
 
 const SettingsScreen = () => {
 	return (
-		<Text>Settngs Screen</Text>
+		<Text>Setting under construction!!</Text>
 	)
 }
 
