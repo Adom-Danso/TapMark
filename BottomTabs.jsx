@@ -2,7 +2,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import {StyleSheet} from 'react-native';
 
-import HomeScreen from './src/screens/stores/HomeScreen'
+import HomeStackScreen from './src/screens/stores/HomeScreen'
 import ProfileStackScreen from './src/screens/profile/ProfileScreen'
 import EditProfileScreen from './src/screens/profile/EditProfileScreen'
 import LoginScreen from './src/screens/auth/LoginPage'
@@ -30,7 +30,7 @@ function BottomTabs() {
         headerShown: false
       })}
     >
-      <Tab.Screen name="Home" component={StoresScreen} />
+      <Tab.Screen name="Home" component={HomeStackScreen} />
       <Tab.Screen name="You" component={ProfileStackScreen} />
     </Tab.Navigator>
   );

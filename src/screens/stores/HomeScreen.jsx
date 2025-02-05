@@ -1,45 +1,50 @@
 import React, {useState} from 'react';
 import { StyleSheet, Text, View, StatusBar, TextInput, Image, FlatList, Pressable } from 'react-native';
 import { styled } from 'styled-components/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+
+import StoreScreen from './StoreScreen'
+
+const HomeStack = createNativeStackNavigator()
 
 const Stores = [
 	{
-		id: 1
+		id: 1,
 		name: 'KFC',
 		dishes: ['Oat Meals', 'Burger', 'MilkShake', 'Fries', 'Jollof', 'Banku', 'Pizza', 'Milo N Bread'],
 		location: 'Tabora',
 		rating: 4,
 	}, 
 	{
-		id: 2
+		id: 2,
 		name: 'Jukes N Foods',
 		dishes: ['Oat Meals', 'Burger', 'MilkShake', 'Fries', 'Jollof', 'Banku', 'Pizza', 'Milo N Bread'],
 		location: 'Tabora',
 		rating: 4,
 	}, 
 	{
-		id: 3
+		id: 3,
 		name: 'Adom\'s food joint',
 		dishes: ['Oat Meals', 'Burger', 'MilkShake', 'Fries', 'Jollof', 'Banku', 'Pizza', 'Milo N Bread'],
 		location: 'Tabora',
 		rating: 4,
 	}, 
 	{
-		id: 4
+		id: 4,
 		name: 'Jon Chief',
 		dishes: ['Oat Meals', 'Burger', 'MilkShake', 'Fries', 'Jollof', 'Banku', 'Pizza', 'Milo N Bread'],
 		location: 'Tabora',
 		rating: 4,
 	}, 
 	{
-		id: 5
+		id: 5,
 		name: 'Papa\'s Pizza',
 		dishes: ['Oat Meals', 'Burger', 'MilkShake', 'Fries', 'Jollof', 'Banku', 'Pizza', 'Milo N Bread'],
 		location: 'Tabora',
 		rating: 4,
 	}, 
 	{
-		id: 6
+		id: 6,
 		name: 'Eddy\'s Pizza',
 		dishes: ['Oat Meals', 'Burger', 'MilkShake', 'Fries', 'Jollof', 'Banku', 'Pizza', 'Milo N Bread'],
 		location: 'Tabora',
@@ -150,16 +155,25 @@ const itemSeparator = () => {
 	)
 }
 
-const StoreName = ({name}) => {
+const StoreName = ({ name, onpress, navigation, id }) => {
 	return (
-		<Pressable style={styles.storeName}>
+		<Pressable
+			style={styles.storeName}
+			onPress={() => {
+				onpress();
+				navigation.navigate('Store', { id });
+			}}
+		>
 			<Text>{name}</Text>
 		</Pressable>
-	)
-}
+	);
+};
 
-const HomeScreen = () => {
+
+const HomeScreen = ({navigation, route}) => {
 	const [searchInput, setSearchInput] = useState('')
+	// const { setStoreId } = route.params
+	const [storeId, setStoreId] = useState(null)
 	return (
 		<MainContent>
 			<SearchBarContainer>
@@ -182,19 +196,49 @@ const HomeScreen = () => {
 			<StoreNamesContainer>
 				<StoresList
 					data={Stores}
-					renderItem={({item}) => <StoreName name={item.name} /> }
-					keyExtractor={item => item.id}
+					renderItem={({ item }) => (
+						<StoreName
+							navigation={navigation}
+							name={item.name}
+							id={item.id}
+							onpress={() => setStoreId(item.id)}
+						/>
+					)}
+					keyExtractor={(item) => item.id.toString()}
 					horizontal={true}
-					showsHorizontalScrollIndicator={false} 
-					ItemSeparatorComponent={ itemSeparator }
+					showsHorizontalScrollIndicator={false}
+					ItemSeparatorComponent={itemSeparator}
 				/>
 			</StoreNamesContainer>
 		</MainContent>
 	)
 }
 
+const HomeStackScreen = () => {
+	return (
+		<HomeStack.Navigator
+			screenOptions={{
+				headerShown: false,
+				headerTintColor: '#fff',
+				headerTitleStyle: { fontWeight: 'bold' },
+			}}
+		>
+			<HomeStack.Screen
+				name="Home"
+				component={HomeScreen}
+				initialParams={{ stores: Stores }}
+				options={{ headerShown: false }}
+			/>
+			<HomeStack.Screen
+				name="Store"
+				component={StoreScreen}
+				initialParams={{ stores: Stores }}
+			/>
+		</HomeStack.Navigator>
+	);
+};
 
-export default HomeScreen;
+export default HomeStackScreen;
 
 
 const styles = StyleSheet.create({
