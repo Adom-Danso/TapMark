@@ -64,3 +64,6 @@ const styles = StyleSheet.create({
     height: 58,
   },
 });
+
+
+// sts
