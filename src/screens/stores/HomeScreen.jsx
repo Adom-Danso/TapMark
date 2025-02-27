@@ -1,9 +1,13 @@
 import React, {useState} from 'react';
-import { StyleSheet, Text, View, StatusBar, TextInput, Image, FlatList, Pressable } from 'react-native';
+import { StyleSheet, Text, View, StatusBar, TextInput, Image, FlatList, Pressable, TouchableOpacity } from 'react-native';
 import { styled } from 'styled-components/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import StoreScreen from './StoreScreen'
+// Custom components
+import MarketScreen from './MarketScreen'
+import PopularMealsItemList from '../components/PopularMealsItem';
+import StoreName from '../components/StoreNamesItem';
+import MarketsItemList from '../components/MarketsItem';
 
 const HomeStack = createNativeStackNavigator()
 
@@ -75,7 +79,7 @@ const HotMeals = [
 	},
 ]
 
-const MainContent = styled.View`
+const MainContent = styled.ScrollView`
 	flex: 1;
 `
 
@@ -85,7 +89,7 @@ const SearchBarContainer = styled.View`
 
 const SearchBar = styled.TextInput`
 	font-size: 15px;
-	border: 1px solid black;
+	border: 1px solid #801818;
 	border-radius: 20px;
 	padding: 12px;
 	background-color: #CCC;
@@ -102,51 +106,31 @@ const PopularMealsHeader = styled.View`
 `
 const PopularMealsTitle = styled.Text`
 	font-size: 18px;
+	font-weight: bold;
 `
 
+// FlatList
 const PopularMealsList = styled.FlatList`
 	padding: 6px;
+`
+const StoresList = styled.FlatList`
+	padding: 6px;
+`
+const MarketsList = styled.FlatList`
+	padding: 6px
 `
 
 const ListSeparator = styled.View`
 	margin: 10px;
 `
 
-const Card = styled.View`
-	width: 250px;
-	height: 200px;
-	border-radius: 10px;
-	padding: 10px;	
-	background-color: white;
-	box-shadow: 5px 5px 5px rgba(0, 0, 0, 0.15);
-`
-
-const CardCover = styled.Image`
-	border-radius: 10px;
-	width: 100%;
-`
-
-const CardTitle = styled.Text`
-	font-size: 18px;
-	padding: 6px;
-`
-
-const StoreNamesContainer = styled.View`
+const PopularStoreNamesContainer = styled.View`
 	padding: 10px;
 `
 
-const StoresList = styled.FlatList`
-	padding: 6px;
+const AllStoresContainer = styled.View `
+	padding: 10px
 `
-
-const ItemList = ({image, name}) => {
-	return (
-		<Card>
-			<CardCover source={require('../../../assets/foodCovers/burger.jpg')} />
-			<CardTitle>{name}</CardTitle>
-		</Card>
-	)
-}
 
 const itemSeparator = () => {
 	return (
@@ -155,19 +139,6 @@ const itemSeparator = () => {
 	)
 }
 
-const StoreName = ({ name, onpress, navigation, id }) => {
-	return (
-		<Pressable
-			style={styles.storeName}
-			onPress={() => {
-				onpress();
-				navigation.navigate('Store', { id });
-			}}
-		>
-			<Text>{name}</Text>
-		</Pressable>
-	);
-};
 
 
 const HomeScreen = ({navigation, route}) => {
@@ -175,25 +146,30 @@ const HomeScreen = ({navigation, route}) => {
 	// const { setStoreId } = route.params
 	const [storeId, setStoreId] = useState(null)
 	return (
-		<MainContent>
+		<MainContent showsVerticalScrollIndicator={false}>
 			<SearchBarContainer>
 				<SearchBar onChangeText={setSearchInput} value={searchInput} keyboardAppearance='default' />
 			</SearchBarContainer>
 			<PopularMealsContainer>
 				<PopularMealsHeader>
 					<PopularMealsTitle>Popular Meals</PopularMealsTitle>
-					<Text>All ></Text>
+					<TouchableOpacity>
+						<Text>See more</Text>
+					</TouchableOpacity>
 				</PopularMealsHeader>
 				<PopularMealsList
 					data={HotMeals}
-					renderItem={({item}) => <ItemList name={item.name} image={item.image} /> }
+					renderItem={({item}) => <PopularMealsItemList name={item.name} image={item.image} /> }
 					keyExtractor={item => item.name}
 					horizontal={true}
 					showsHorizontalScrollIndicator={false} 
 					ItemSeparatorComponent={ itemSeparator }
 				/>
 			</PopularMealsContainer>
-			<StoreNamesContainer>
+			<PopularStoreNamesContainer>
+				<PopularMealsHeader>
+					<PopularMealsTitle>Popular Sellers</PopularMealsTitle>
+				</PopularMealsHeader>
 				<StoresList
 					data={Stores}
 					renderItem={({ item }) => (
@@ -209,7 +185,20 @@ const HomeScreen = ({navigation, route}) => {
 					showsHorizontalScrollIndicator={false}
 					ItemSeparatorComponent={itemSeparator}
 				/>
-			</StoreNamesContainer>
+			</PopularStoreNamesContainer>
+			<AllStoresContainer>
+				<PopularMealsHeader>
+					<PopularMealsTitle>Markets</PopularMealsTitle>
+				</PopularMealsHeader>
+				<MarketsList
+					data={HotMeals}
+					renderItem={({item}) => <MarketsItemList name={item.name} image={item.image} navigation={navigation} /> }
+					keyExtractor={item => item.name}
+					horizontal={true}
+					showsHorizontalScrollIndicator={false} 
+					ItemSeparatorComponent={ itemSeparator }
+				/>
+			</AllStoresContainer>
 		</MainContent>
 	)
 }
@@ -231,7 +220,7 @@ const HomeStackScreen = () => {
 			/>
 			<HomeStack.Screen
 				name="Store"
-				component={StoreScreen}
+				component={MarketScreen}
 				initialParams={{ stores: Stores }}
 			/>
 		</HomeStack.Navigator>
@@ -241,13 +230,3 @@ const HomeStackScreen = () => {
 export default HomeStackScreen;
 
 
-const styles = StyleSheet.create({
-	storeName: {
-		backgroundColor: '#CCC',
-		color: 'green',
-		padding: 5,
-		paddingLeft: 10,
-		paddingRight: 10,
-		borderRadius: 15,
-	}
-})
