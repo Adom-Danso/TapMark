@@ -1,30 +1,29 @@
-import { PaperProvider } from 'react-native-paper';
-import { StyleSheet, Text, View, SafeAreaView, StatusBar } from 'react-native';
-import { NavigationContainer, useNavigation } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { styled } from 'styled-components/native';
+import WelcomePage from './src/screens/auth/WelcomePage';
+import LoginPage from './src/screens/auth/LoginPage';
+import SignupPage from './src/screens/auth/SignupPage';
+import OtpPage from './src/screens/auth/OtpPage';
+import BottomTabs from './BottomTabs';
 
-import BottomTabs from './BottomTabs'
+const Stack = createNativeStackNavigator();
 
-const Stack = createNativeStackNavigator()
-
-const SafeArea = styled.SafeAreaView`
-  flex: 1;
-  padding-top: ${StatusBar.currentHeight}px;
-  background-color: #4a4b4d;
-`
-// #444950
-// #4a4b4d
-
-export default function App({navigation}) {
-
+export default function App() {
   return (
-    <SafeArea>
+    <SafeAreaView style={{ flex: 1 }}>
       <NavigationContainer>
-        <BottomTabs />
+        <Stack.Navigator
+          initialRouteName="Welcome"
+          screenOptions={{ headerShown: false }}
+        >
+          <Stack.Screen name="Welcome" component={WelcomePage} />
+          <Stack.Screen name="Login" component={LoginPage} />
+          <Stack.Screen name="Signup" component={SignupPage} />
+          <Stack.Screen name="Otp" component={OtpPage} />
+          <Stack.Screen name="Main" component={BottomTabs} />
+        </Stack.Navigator>
       </NavigationContainer>
-    </SafeArea>
-    
+    </SafeAreaView>
   );
 }
