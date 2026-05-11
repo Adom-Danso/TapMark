@@ -1,4 +1,4 @@
-{
+module.exports = {
   "expo": {
     "name": "TapMark",
     "slug": "TapMark",
@@ -37,8 +37,8 @@
       [
         "react-native-maps",
         {
-          "androidGoogleMapsApiKey": "AIzaSyDrhpKWtoNtn0uX22tAjahgEn7pQRG6CJ0",
-          "iosGoogleMapsApiKey": "AIzaSyDrhpKWtoNtn0uX22tAjahgEn7pQRG6CJ0"
+          "androidGoogleMapsApiKey": process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || "",
+          "iosGoogleMapsApiKey": process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || ""
         }
       ],
       [
