@@ -5,14 +5,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AUTH_COLORS, AUTH_SPACING } from '../screens/auth/authTheme';
 import SearchBar from './SearchBar';
 
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+
 const HomeHeader = ({
   locationLabel = 'Delivering to',
   location = 'Nii Okaiman West',
   greeting = 'What are you craving today?',
   onSearchPress,
+  onLocationPress,
 }) => {
   const insets = useSafeAreaInsets();
   const headerAnim = useRef(new Animated.Value(0)).current;
+  const locationScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.timing(headerAnim, {
@@ -44,18 +48,47 @@ const HomeHeader = ({
       ]}
     >
       <View style={styles.headerHalo} />
-      <View style={styles.locationRow}>
-        <View style={styles.locationIconWrap}>
-          <Ionicons name="location-outline" size={18} color={AUTH_COLORS.primary} />
-        </View>
-        <View style={styles.locationTextWrap}>
-          <Text style={styles.locationLabel}>{locationLabel}</Text>
-          <Text style={styles.locationText}>{location}</Text>
-        </View>
-        <TouchableOpacity activeOpacity={0.8} style={styles.locationAction}>
-          <Ionicons name="chevron-down" size={18} color={AUTH_COLORS.muted} />
-        </TouchableOpacity>
-      </View>
+      <AnimatedTouchable
+        activeOpacity={0.85}
+        style={styles.locationRow}
+        onPress={onLocationPress}
+        onPressIn={() => {
+          Animated.spring(locationScale, {
+            toValue: 0.97,
+            useNativeDriver: true,
+            speed: 20,
+            bounciness: 6,
+          }).start();
+        }}
+        onPressOut={() => {
+          Animated.spring(locationScale, {
+            toValue: 1,
+            useNativeDriver: true,
+            speed: 20,
+            bounciness: 6,
+          }).start();
+        }}
+      >
+        <Animated.View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            transform: [{ scale: locationScale }],
+          }}
+        >
+          <View style={styles.locationIconWrap}>
+            <Ionicons name="location-outline" size={18} color={AUTH_COLORS.primary} />
+          </View>
+          <View style={styles.locationTextWrap}>
+            <Text style={styles.locationLabel}>{locationLabel}</Text>
+            <Text style={styles.locationText}>{location}</Text>
+          </View>
+          <View style={styles.locationAction}>
+            <Ionicons name="chevron-down" size={18} color={AUTH_COLORS.muted} />
+          </View>
+        </Animated.View>
+      </AnimatedTouchable>
       <Text style={styles.greeting}>{greeting}</Text>
       <SearchBar
         placeholder="Food, restaurants, stores..."
