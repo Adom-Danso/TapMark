@@ -1,6 +1,7 @@
 import React from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AUTH_COLORS, AUTH_SPACING } from '../screens/auth/authTheme';
+import SectionCarouselSkeleton from './SectionCarouselSkeleton';
 
 const HomeSectionCarousel = ({
   title,
@@ -38,10 +39,13 @@ const HomeSectionCarousel = ({
           ) : null}
         </View>
         <View style={[styles.loadingRow, { minHeight: loadingHeight }]}>
-          <View style={styles.loadingInline}>
-            <ActivityIndicator size="small" color={AUTH_COLORS.primary} />
-            <Text style={styles.loadingText}>Loading...</Text>
-          </View>
+          <SectionCarouselSkeleton
+            itemCount={2}
+            itemWidth={160}
+            itemHeight={loadingHeight - 20}
+            itemSeparatorWidth={itemSeparatorWidth}
+            contentPaddingRight={contentPaddingRight}
+          />
         </View>
       </View>
     );
@@ -98,15 +102,6 @@ const styles = StyleSheet.create({
   loadingRow: {
     justifyContent: 'center',
     paddingLeft: 2,
-  },
-  loadingInline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  loadingText: {
-    color: AUTH_COLORS.muted,
-    fontSize: 13,
   },
 });
 

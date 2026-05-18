@@ -77,7 +77,6 @@ export const LocationProvider = ({ children }: { children: React.ReactNode }) =>
           longitude: location.coords.longitude,
         });
 
-        console.log("📍 Place from Expo:", place);
 
         if (place) {
           currentLoc.name = place.city || place.street || place.name || "Current Location";

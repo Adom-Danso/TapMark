@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from '../auth/authTheme';
 import { useFavorites } from '../../context/FavoritesContext';
 import { useLocation } from '../../context/LocationContext';
-import { getProfileData } from '@/utils/profile';
+import { clearProfileData, getProfileData } from '@/utils/profile';
 import { ProfileData } from '@/schemas/profile';
 import { UserWallet } from '@/schemas/wallets';
 import { getOneUserWallets } from '@/functions/wallets/get-one-wallet-by-id';
@@ -22,6 +22,10 @@ import { useQuery } from '@tanstack/react-query';
 import { addOneUserWallets } from '@/functions/wallets/add-one-user-wallet';
 import { useProfile } from '@/context/ProfileContext';
 import { usePaymentMethods } from '@/context/PaymentMethodsContext';
+import { clearFavorites } from '@/utils/favourites';
+import { clearLocations } from '@/utils/locations';
+import { clearActiveCartId } from '@/utils/cart';
+import { clearTokens } from '@/utils/tokens';
 
 const ActionRow = ({ icon, title, subtitle, onPress }: { icon: string; title: string; subtitle: string; onPress: () => void }) => {
   const scale = useRef(new Animated.Value(1)).current;
@@ -43,6 +47,7 @@ const ActionRow = ({ icon, title, subtitle, onPress }: { icon: string; title: st
       bounciness: 8,
     }).start();
   };
+ 
 
   return (
     <Animated.View style={{ transform: [{ scale }] }}>
@@ -86,6 +91,14 @@ const ProfileScreen = ({ navigation, route }: { navigation: any; route: any }) =
 
   const goToAuthWelcome = () => {
     const rootNav = navigation.getParent()?.getParent();
+    (async ()=> {
+      await clearFavorites();
+      await clearProfileData();
+      await clearLocations();
+      await clearActiveCartId();
+      await clearTokens();
+    })()
+    
     if (rootNav) {
       rootNav.reset({
         index: 0,

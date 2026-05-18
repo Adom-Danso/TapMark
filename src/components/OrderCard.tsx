@@ -228,7 +228,7 @@ const OrderCard = ({ order, onPress, onReorder }: { order: Order; onPress: () =>
       >
         {/* Header: Order Number & Status */}
         <HeaderRow>
-          <OrderNumber>Order #{order.orderNumber}</OrderNumber>
+          <OrderNumber>{order.orderNumber}</OrderNumber>
           <StatusPill background={statusStyle.background}>
             <StatusText color={statusStyle.color}>{order.orderStatus}</StatusText>
           </StatusPill>
@@ -243,10 +243,10 @@ const OrderCard = ({ order, onPress, onReorder }: { order: Order; onPress: () =>
           <Value>{formatDate(order.createdAt)}</Value>
         </InfoRow>
 
-        <InfoRow>
+        {/* <InfoRow>
           <Label>Items</Label>
           <Value>{order.cart.cartItems.length}</Value>
-        </InfoRow>
+        </InfoRow> */}
 
         {order.orderStatus === 'pending' && order.eta && (
           <InfoRow>

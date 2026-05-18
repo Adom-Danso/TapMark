@@ -2,27 +2,20 @@ import { SuccessResponse } from "@/schemas/shared";
 import { ApiError } from "@/schemas/shared";
 import { axiosInstance } from "@/utils/axios-instance";
 import axios from "axios";
-import { Payment } from "@/schemas/payments";
+import { BackendGpsLocation, Order, TempOrders } from "@/schemas/orders";
 
-export type RequestBody = {
-    userId: string, 
-    cartId: string, 
-    amount: number, 
-    tempOrderId: string;
-    paymentMethod: string;
-    mobileMoney?: object;
-    bank?: object;
-}
 
-export async function addOnePayment(
-    payload: RequestBody
-): Promise<SuccessResponse<Payment>> {
+export async function updateOneOrder(
+    orderId: string,
+    payload: Partial<Order>,
+): Promise<SuccessResponse<Order>> {
     try {
-        const response = await axiosInstance.post(`/payments`, payload);
-        return response.data as SuccessResponse<Payment>;
+        const response = await axiosInstance.patch(`/orders/${orderId}`, payload);
+        return response.data as SuccessResponse<Order>;
     } catch (error) {
         if (axios.isAxiosError(error)) {
             if (error.response) {
+
                 if (typeof error.response.data.detail === 'string') {
                     throw new ApiError(error.response.data.detail, error.response.status);
                 } else {

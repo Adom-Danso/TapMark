@@ -14,7 +14,6 @@ export async function checkPaymentStatus(
     } catch (error) {
         if (axios.isAxiosError(error)) {
             if (error.response) {
-                console.log(error.response.data)
                 if (typeof error.response.data.detail === 'string') {
                     throw new ApiError(error.response.data.detail, error.response.status);
                 } else {

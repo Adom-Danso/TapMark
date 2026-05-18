@@ -19,6 +19,8 @@ export async function searchOrders(
     paymentTiming: string | null = null,
     dispatchDate: string | null = null,
     isPickedUp: boolean | null = null,
+    assignedCourierId: string | null = null,
+    isAssignedToCourier: boolean | null = null
 ): Promise<SuccessResponse<Order[]>> {
     try {
         const response = await axiosInstance.get('/orders', {
@@ -35,6 +37,8 @@ export async function searchOrders(
                 payment_timing: paymentTiming,
                 dispatch_date: dispatchDate,
                 is_picked_up: isPickedUp,
+                assigned_courier_id: assignedCourierId,
+                is_assigned_to_courier: isAssignedToCourier,
             }
         });
         return response.data as SuccessResponse<Order[]>;

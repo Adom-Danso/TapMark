@@ -1,46 +1,25 @@
 import { SuccessResponse } from "@/schemas/shared";
-import { Store } from "@/schemas/stores";
+import { StoreItem } from "@/schemas/store-items";
 import { ApiError } from "@/schemas/shared";
 import { axiosInstance } from "@/utils/axios-instance";
 import axios from "axios";
+import { StoreCategories } from "@/schemas/store-categories";
 
 
-export async function searchStores(
+export async function searchStoreCategories(
     limit: number,
     skip: number,
     name: string | null = null,
-    sortBy: string | null = null,
-    sortOrder: string | null = null,
-    storeIds: string[] | null = null,
-    shuffle: boolean = false,
-    centerLat: number | null = null,
-    centerLng: number | null = null,
-    maxDistance: number | null = null,
-    storeCategoryIds: string[] | null = null,
-    minimumRating: number | null = null,
-    userId: string | null = null,
-    campusId: string | null = null,
-): Promise<SuccessResponse<Store[]>> {
+): Promise<SuccessResponse<StoreCategories[]>> {
     try {
-        const response = await axiosInstance.get('/stores', {
+        const response = await axiosInstance.get('/store-categories', {
             params: {
                 name: name,
                 limit: limit,
                 skip: skip,
-                sort_by: sortBy,
-                sort_order: sortOrder,
-                store_ids: storeIds,
-                shuffle: shuffle,
-                center_lat: centerLat,
-                center_lng: centerLng,
-                max_distance: maxDistance,
-                store_category_ids: storeCategoryIds,
-                minimum_rating: minimumRating,
-                user_id: userId,
-                campus_id: campusId,
             }
         });
-        return response.data as SuccessResponse<Store[]>;
+        return response.data as SuccessResponse<StoreCategories[]>;
 
     } catch (error) {
         if (axios.isAxiosError(error)) {

@@ -12,64 +12,9 @@ import { useQuery } from '@tanstack/react-query';
 import { StoreItem } from '@/schemas/store-items';
 import { Store } from '@/schemas/stores';
 import { StoreCategories } from '@/schemas/store-categories';
-import { getGpsDistanceInMeters } from '@/utils/shared';
-
-const TOP_CATEGORIES = [
-  {
-    id: 'all',
-    label: 'All stores',
-    imageUri:
-      'https://images.unsplash.com/photo-1515168833906-d2a3b82b3021?auto=format&fit=crop&w=300&q=80',
-  },
-  {
-    id: 'groceries',
-    label: 'Groceries',
-    imageUri:
-      'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80',
-  },
-  {
-    id: 'pharmacy',
-    label: 'Pharmacy',
-    imageUri:
-      'https://images.unsplash.com/photo-1580281658629-7680f3b7d99b?auto=format&fit=crop&w=300&q=80',
-  },
-  {
-    id: 'beauty',
-    label: 'Health & Beauty',
-    imageUri:
-      'https://images.unsplash.com/photo-1612817288484-6f916006741a?auto=format&fit=crop&w=300&q=80',
-  },
-  {
-    id: 'produce',
-    label: 'Fresh Produce',
-    imageUri:
-      'https://images.unsplash.com/photo-1459411552884-841db9b3cc2a?auto=format&fit=crop&w=300&q=80',
-  },
-  {
-    id: 'snacks',
-    label: 'Snacks',
-    imageUri:
-      'https://images.unsplash.com/photo-1519996529931-28324d5a630e?auto=format&fit=crop&w=300&q=80',
-  },
-  {
-    id: 'drinks',
-    label: 'Drinks',
-    imageUri:
-      'https://images.unsplash.com/photo-1510626176961-4b57d4fbad03?auto=format&fit=crop&w=300&q=80',
-  },
-  {
-    id: 'household',
-    label: 'Household',
-    imageUri:
-      'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=300&q=80',
-  },
-  {
-    id: 'baby',
-    label: 'Baby Care',
-    imageUri:
-      'https://images.unsplash.com/photo-1522771930-78848d9293e8?auto=format&fit=crop&w=300&q=80',
-  },
-];
+import { generateImageUrl, getGpsDistanceInMeters } from '@/utils/shared';
+import { searchStoreCategories } from '@/functions/store-categories/search-store-categories';
+import { showToast } from '@/utils/notifications';
 
 type Sections = "save" | "explore" | "top-rated" | "recommended";
 
@@ -98,18 +43,35 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
   const [homeSections, setHomeSections] = useState<any[]>(HOME_SECTIONS);
 
 
+  const searchStoreCategoriesQuery = useQuery({
+    queryKey: ['storeCategories'],
+    queryFn: async () => {
+      try {
+        const response = await searchStoreCategories(
+          5,
+          0,
+          null,
+        );
+        return response.data;
+      } catch (error: any) {
+        showToast("error", error.message || "Failed to load store categories. Please try again.");
+        return [];
+      }
+    },
+  })
+  React.useEffect(() => {
+    if (searchStoreCategoriesQuery.data && searchStoreCategoriesQuery.status === 'success') {
+      setCategories(searchStoreCategoriesQuery.data);
+    }
+  }, [searchStoreCategoriesQuery.data, searchStoreCategoriesQuery.status]);
+
+
   const handleCardPress = (item: Store | StoreItem) => {
-    // if (item?.variant === 'item') {
-    //   navigation.navigate('ItemDetails', {
-    //     item: normalizeItemForDetails(item),
-    //   });
-    //   return;
-    // }
 
     navigation.navigate('StoreDetails', {
       id: item.id,
       name: item.name,
-      imageUri: `${process.env.EXPO_PUBLIC_BACKEND_URL}${(item as Store).coverPhoto.fileStoragePath}`,
+      imageUri: generateImageUrl((item as Store).coverPhoto.fileStoragePath),
       rating: item.averageRating,
       isOpen: (item as Store).isOpen,
       averageRating: (item as Store).averageRating,
@@ -172,9 +134,9 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
   const recommendedSectionQuery = useHomeSection("recommended");
 
   React.useEffect(
-    ()=> {
+    () => {
       if (saveSectionQuery.data && saveSectionQuery.status === "success" && saveSectionQuery.data.length > 0) {
-        setHomeSections((prev) => prev.map(section => section.id === "save" ? {...section, data: saveSectionQuery.data} : section));
+        setHomeSections((prev) => prev.map(section => section.id === "save" ? { ...section, data: saveSectionQuery.data } : section));
       }
     }, [saveSectionQuery.data, saveSectionQuery.status]
   )
@@ -195,10 +157,10 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
   const handleSearchPress = () => {
     const parentNav = navigation.getParent();
     if (parentNav) {
-      parentNav.navigate('Search');
+      parentNav.navigate('Search', { isSearchFocused: true });
       return;
     }
-    navigation.navigate('Search');
+    navigation.navigate('Search', { isSearchFocused: true });
   };
 
   const handleLocationPress = () => {
@@ -222,18 +184,27 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
         ) : null}
         {categories.length > 0 && (
           <View style={styles.categorySection}>
-            <CategoryStrip title="Top rated categories" categories={categories} tileSize={50} onCategoryPress={()=> console.log("category press")} />
+            <CategoryStrip title="Top rated categories" categories={categories} tileSize={50} onCategoryPress={(category) => {
+              const params: any = {
+                title: category.name,
+                limit: 12,
+                skip: 0,
+                storeCategoryIds: [category.id]
+              }
+              navigation.navigate('SectionList', params);
+
+            }} />
           </View>
         )}
         {HOME_SECTIONS.map((section) => (
           <HomeSectionCarousel
-              key={section.id}
-              title={section.title}
-              data={getSectionData(section.id as Sections)}
-              loading={section.id == "save" ? isLoading && saveSectionQuery.isPending: section.id == "explore" ? exploreSectionQuery.isPending : section.id == "top-rated" ? topRatedSectionQuery.isPending : recommendedSectionQuery.isPending}
-              loadingHeight={210}
-              onActionPress={() => handleSeeMorePress(section)}
-              renderItem={({ item }: { item: Store | StoreItem }) => (
+            key={section.id}
+            title={section.title}
+            data={getSectionData(section.id as Sections)}
+            loading={section.id == "save" ? isLoading && saveSectionQuery.isPending : section.id == "explore" ? exploreSectionQuery.isPending : section.id == "top-rated" ? topRatedSectionQuery.isPending : recommendedSectionQuery.isPending}
+            loadingHeight={210}
+            onActionPress={() => handleSeeMorePress(section)}
+            renderItem={({ item }: { item: Store | StoreItem }) => (
               <StoreCard
                 size={"medium"}
                 variant={'store'}

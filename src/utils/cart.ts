@@ -8,3 +8,7 @@ export async function getActiveCartId() {
     const cartId = await SecureStore.getItemAsync("activeCartId")
     return cartId as string
 }
+
+export async function clearActiveCartId() {
+    await SecureStore.deleteItemAsync("activeCartId")
+}

@@ -61,6 +61,10 @@ export const toPaystackBankFragment = (method: PaymentMethodType) => ({
   code: method.bankCode,
 });
 
+async function clearPaymentMethods() {
+    await SecureStore.deleteItemAsync("payment_methods")
+}
+
 export default {
   normalizePhoneE164,
   formatDisplayLabel,

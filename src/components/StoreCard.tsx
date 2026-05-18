@@ -6,6 +6,7 @@ import styled from 'styled-components/native';
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from '../screens/auth/authTheme';
 import { Store } from '@/schemas/stores';
 import { StoreItem } from '@/schemas/store-items';
+import { generateImageUrl } from '@/utils/shared';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -196,7 +197,7 @@ const StoreCard = ({
     }
   };
 
-  const handleFavoritePress = (event) => {
+  const handleFavoritePress = (event: any) => {
     if (event?.stopPropagation) {
       event.stopPropagation();
     }
@@ -233,7 +234,7 @@ const StoreCard = ({
     >
       <ImageWrap style={{ height: sizePreset.imageHeight }}>
         {(data as Store).coverPhoto.fileStoragePath ? (
-          <CardImage source={{ uri: `${process.env.EXPO_PUBLIC_BACKEND_URL}${(data as Store).coverPhoto.fileStoragePath}` }} resizeMode="cover" />
+          <CardImage source={{ uri: generateImageUrl((data as Store).coverPhoto.fileStoragePath) }} resizeMode="cover" />
         ) : (
           <View />
         )}

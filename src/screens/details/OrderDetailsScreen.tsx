@@ -1,23 +1,47 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View, TouchableOpacity, Modal, Linking, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AUTH_COLORS, AUTH_SPACING } from '../auth/authTheme';
-import { ORDER_TIMELINE_STEPS, getOrderById, getOrderStatusMeta, getTimelineStepIndex } from '../../functions/orderData';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { getOneOrderById } from '@/functions/orders/get-one-order-by-id';
 import { showToast } from '@/utils/notifications';
 import { Order } from '@/schemas/orders';
 import { useLocation } from '@/context/LocationContext';
+import { generateImageUrl } from '@/utils/shared';
+import { updateOneOrder } from '@/functions/orders/update-one-order-by-id';
+
+const ORDER_TIMELINE_STEPS = ['placed', 'processing', 'assigned', 'pick_up_completed', 'completed'] as const;
 
 const STEP_META = {
   placed: { label: 'Placed', icon: 'checkmark-circle-outline' },
   processing: { label: 'Preparing', icon: 'flame-outline' },
-  assigned: {label: 'Assigned to courier', icon: 'bicycle'},
+  assigned: { label: 'Assigned to courier', icon: 'bicycle' },
   pick_up_completed: { label: 'Picked up', icon: 'bicycle-outline' },
   completed: { label: 'Delivered', icon: 'flag-outline' },
-  cancelled: {label: "Cancelled", icon: 'close'}
+  cancelled: { label: "Cancelled", icon: 'close' }
+} as const;
+
+const getTimelineStepIndex = (trackingStage?: string | null) => {
+  const normalizedStage = String(trackingStage || '').toLowerCase();
+
+  switch (normalizedStage) {
+    case 'placed':
+      return 0;
+    case 'processing':
+      return 1;
+    case 'assigned':
+      return 2;
+    case 'pick_up_completed':
+    case 'picked_up':
+      return 3;
+    case 'completed':
+    case 'delivered':
+      return 4;
+    default:
+      return 0;
+  }
 };
 
 
@@ -32,9 +56,11 @@ const formatDateTime = (dateString: string) => {
   });
 };
 
-const formatMoney = (value) => `GHS ${Number(value || 0).toFixed(2)}`;
+const formatMoney = (value: unknown) => `GHS ${Number(value || 0).toFixed(2)}`;
 
-const TimelineStep = ({ stepKey, isActive, isComplete, isLast }: {stepKey: string, isActive: boolean, isComplete: boolean, isLast: boolean}) => {
+type TimelineStepKey = keyof typeof STEP_META;
+
+const TimelineStep = ({ stepKey, isActive, isComplete, isLast }: { stepKey: TimelineStepKey; isActive: boolean; isComplete: boolean; isLast: boolean }) => {
   const meta = STEP_META[stepKey];
 
   return (
@@ -62,21 +88,20 @@ const TimelineStep = ({ stepKey, isActive, isComplete, isLast }: {stepKey: strin
 };
 
 const OrderDetailsScreen = () => {
-  const route = useRoute();
+  const route = useRoute<any>();
   const insets = useSafeAreaInsets();
   const orderId = route.params?.orderId;
-  const {getLocationName} = useLocation()
+  const { getLocationName } = useLocation()
 
-  // const order = useMemo(() => (orderId ? getOrderById(orderId) : null), [orderId]);
   const [order, setOrder] = useState<Order | null>(null)
-  const statusMeta = getOrderStatusMeta(order?.status);
-  const activeStepIndex = getTimelineStepIndex(order?.trackingStage);
-  const isCompleted = order?.status === 'completed';
+  const orderStatus = String((order as any)?.orderStatus || (order as any)?.status || '').toLowerCase();
+  const activeStepIndex = getTimelineStepIndex((order as any)?.trackingStage || orderStatus);
+  const isCompleted = orderStatus === 'completed' || orderStatus === 'delivered';
   const [showCourierModal, setShowCourierModal] = useState(false);
 
   const fetchOneOrderQuery = useQuery({
     queryKey: ["fetchOneOrder", orderId],
-    queryFn: async () =>{
+    queryFn: async () => {
       try {
         const response = await getOneOrderById(orderId)
         return response.data
@@ -86,11 +111,26 @@ const OrderDetailsScreen = () => {
       }
     }
   })
-  React.useEffect(()=>{
+  React.useEffect(() => {
     if (fetchOneOrderQuery.data && fetchOneOrderQuery.status == "success") {
       setOrder(fetchOneOrderQuery.data)
     }
   }, [fetchOneOrderQuery.data, fetchOneOrderQuery.status])
+
+  const updateOneOrderMutation = useMutation({
+    mutationKey: ["updateOneOrder", orderId],
+    mutationFn: async (updates: Partial<Order>) => {
+      const response = updateOneOrder(orderId, updates)
+      return response
+    },
+    onSuccess: (data) => {
+      showToast("success", "Order updated successfully")
+      fetchOneOrderQuery.refetch()
+    },
+    onError: (error: any) => {
+      showToast("error", error.message || "Failed to update order")
+    }
+  })
 
   return (
     <View style={styles.container}>
@@ -111,11 +151,11 @@ const OrderDetailsScreen = () => {
             <View style={styles.summaryCard}>
               <View style={styles.summaryTopRow}>
                 <View style={styles.summaryTextWrap}>
-                  <Text style={styles.orderLabel}>Order #{order.orderNumber}</Text>
+                  <Text style={styles.orderLabel}>{order.orderNumber}</Text>
                   <Text style={styles.subtitle}>{formatDateTime(order.createdAt)}</Text>
                 </View>
                 <View style={styles.statusPill}>
-                  <Text style={styles.statusText}>{statusMeta.label}</Text>
+                  <Text style={styles.statusText}>{order.orderStatus}</Text>
                 </View>
               </View>
 
@@ -153,7 +193,7 @@ const OrderDetailsScreen = () => {
                   <TimelineStep
                     key={stepKey}
                     stepKey={stepKey}
-                    isComplete={index < activeStepIndex || (isCompleted && stepKey === 'delivered')}
+                    isComplete={index < activeStepIndex || (isCompleted && stepKey === 'completed')}
                     isActive={index === activeStepIndex}
                     isLast={index === ORDER_TIMELINE_STEPS.length - 1}
                   />
@@ -169,7 +209,7 @@ const OrderDetailsScreen = () => {
               >
                 <View style={styles.modalBackdrop}>
                   <View style={styles.modalCard}>
-                    <Image source={{ uri: `${process.env.EXPO_PUBLIC_BACKEND_URL}${order.courier.photo?.fileStoragePath}` }} style={styles.modalAvatar} />
+                    <Image source={{ uri: generateImageUrl(order.courier.photo?.fileStoragePath || '') }} style={styles.modalAvatar} />
                     <Text style={styles.modalTitle}>Courier details</Text>
                     <Text style={styles.modalRow}>{`${order.courier.firstName} ${order.courier.lastName}`}</Text>
                     {/* <Text style={styles.modalRow}>{order.courier.vehicle} • {order.courier.plate}</Text> */}
@@ -196,7 +236,7 @@ const OrderDetailsScreen = () => {
               <Text style={styles.sectionTitle}>Delivery info</Text>
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Address</Text>
-                <Text style={styles.infoValue}>{getLocationName(order.deliveryAddressGpsLocation.lat, order.deliveryAddressGpsLocation.lng).then(name=>name) || 'Not available'}</Text>
+                <Text style={styles.infoValue}>{getLocationName(order.deliveryAddressGpsLocation.lat, order.deliveryAddressGpsLocation.lng).then(name => name) || 'Not available'}</Text>
               </View>
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Instructions</Text>
@@ -238,6 +278,20 @@ const OrderDetailsScreen = () => {
                 <Text style={styles.breakdownTotal}>{formatMoney(order.payment.amount)}</Text>
               </View>
             </View>
+
+            {!order.isPickedUp && (
+              <TouchableOpacity
+                style={[styles.cancelButton, updateOneOrderMutation.isPending && styles.cancelButtonDisabled]}
+                onPress={() => updateOneOrderMutation.mutate({ orderStatus: 'cancelled' })}
+                activeOpacity={0.85}
+                disabled={updateOneOrderMutation.isPending}
+              >
+                <Ionicons name="close-circle-outline" size={18} color="#fff" />
+                <Text style={styles.cancelButtonText}>
+                  {updateOneOrderMutation.isPending ? 'Cancelling...' : 'Cancel Order'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </>
         )}
       </ScrollView>
@@ -534,6 +588,30 @@ const styles = StyleSheet.create({
   },
   modalCloseText: {
     color: AUTH_COLORS.muted,
+  },
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#DC3545',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginTop: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  cancelButtonDisabled: {
+    opacity: 0.6,
+  },
+  cancelButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
 

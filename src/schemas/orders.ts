@@ -18,6 +18,7 @@ export type TempOrders = {
     deliveryFee: number;
     serviceFee: number;
     paymentTiming: "upfront" | "cash_on_delivery";
+    deliveryInstructions?: string;
 }   
 
 export type Order = {

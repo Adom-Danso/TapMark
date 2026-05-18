@@ -7,6 +7,8 @@ import { CartItem, CartItemAddition } from '@/schemas/cart-items';
 import { StoreItemExtra } from '@/schemas/store-item-extras';
 import { getActiveCartId, saveActiveCartId } from '@/utils/cart';
 import { showToast } from '@/utils/notifications';
+import { generateImageUrl } from '@/utils/shared';
+import { clearTokens } from '@/utils/tokens';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import React, { createContext, useContext, useMemo, useState } from 'react';
 import { set } from 'zod';
@@ -70,7 +72,7 @@ const buildCartLine = (payload: CartItem) => {
     itemId: payload.storeItem.id || 'item',
     storeId: payload.storeItem.storeId || 'store',
     title: payload.storeItem.name || 'Item',
-    imageUri: `${process.env.EXPO_PUBLIC_BACKEND_URL}${payload.storeItem.photo?.fileStoragePath || ''}`,
+    imageUri: generateImageUrl(payload.storeItem.photo?.fileStoragePath || ''),
     basePrice,
     selectedExtras: payload.additions || [],
     note: normalizeNote(payload.note as string),
@@ -95,23 +97,26 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const [activeCartId, setActiveCartId] = useState<string | null>(null);
 
   async function fetchActiveCart() {
-    const activeCartId = await getActiveCartId();
-    if (!activeCartId || activeCartId === 'undefined' || activeCartId === 'null') {
+    const _activeCartId = await getActiveCartId();
+    
+    if (!_activeCartId || _activeCartId === 'undefined' || _activeCartId === 'null') {
       const newCartResponse = await addOneCart();
       await saveActiveCartId(newCartResponse.data.id);
       setActiveCartId(newCartResponse.data.id);
+      return (await getOneCartById(newCartResponse.data.id));
     }
 
     try {
-      const response = await getOneCartById(activeCartId);
+      const response = await getOneCartById(_activeCartId as string);
+
       if (response.data.isOrderCompleted) {
         const newCartResponse = await addOneCart();
         await saveActiveCartId(newCartResponse.data.id);
         setActiveCartId(newCartResponse.data.id);
-        const response = await getOneCartById(activeCartId);
-        return response.data
+        return (await getOneCartById(newCartResponse.data.id))
       }
-      setActiveCartId(activeCartId);
+
+      setActiveCartId(_activeCartId);
       return response.data;
     } catch (error: any) {
 
@@ -119,8 +124,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
         const newCartResponse = await addOneCart();
         await saveActiveCartId(newCartResponse.data.id);
         setActiveCartId(newCartResponse.data.id);
-        const response = await getOneCartById(activeCartId);
-        return response.data;
+        return (await getOneCartById(newCartResponse.data.id));
       }
 
       showToast("error", error.message || "Failed to load cart");

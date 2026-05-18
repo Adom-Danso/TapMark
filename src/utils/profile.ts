@@ -10,3 +10,8 @@ export async function getProfileData() {
     const data = await SecureStore.getItemAsync("profile_data")
     return data ? JSON.parse(data) as ProfileData : data
 }
+
+export async function clearProfileData() {
+    await SecureStore.deleteItemAsync("profile_data")
+}
+

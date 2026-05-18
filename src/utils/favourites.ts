@@ -9,3 +9,7 @@ export async function getFavorites() {
     const favorites = await SecureStore.getItemAsync('favorite_stores');
     return favorites ? JSON.parse(favorites) as string[] : [];
 }
+
+export async function clearFavorites() {
+    await SecureStore.deleteItemAsync('favorite_stores');
+}

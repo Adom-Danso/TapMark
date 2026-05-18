@@ -13,7 +13,6 @@ type RequestBody = {
 export async function resendOtp (
     credentials: RequestBody
 ) : Promise<SuccessResponse<User>> {
-    console.log("Resending OTP with credentials:", credentials);
     try {
         const response = await axiosInstance.post('/auth/otp', credentials);
         return response.data as SuccessResponse<User>;

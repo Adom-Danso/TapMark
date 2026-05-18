@@ -14,11 +14,12 @@ import { getOneCartById } from '@/functions/cart/get-one-cart-by-id';
 import { getActiveCartId, saveActiveCartId } from '@/utils/cart';
 import { addOneCart } from '@/functions/cart/add-one-cart';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { CartItemAddition } from '@/schemas/cart-items';
+import { CartItem, CartItemAddition } from '@/schemas/cart-items';
 import { addOneTempOrder, RequestBody } from '@/functions/orders/add-one-temp-order';
 import { useProfile } from '@/context/ProfileContext';
 import { getCartInvoice } from '@/functions/cart/get-cart-invoice';
 import { CartInvoice } from '@/schemas/cart';
+import { updateOneCartItem } from '@/functions/cart-items/update-cart-item-by-id';
 
 const PAYMENT_METHODS = [
   { id: 'mobile-money', label: 'Mobile Money', icon: 'phone-portrait-outline' },
@@ -29,7 +30,7 @@ const CartScreen = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { currentLocation } = useLocation();
-  const { cartLines, updateCartLineQty, removeCartLine, updateCartLineExtras, isRemoving, activeCartId } = useCart();
+  const { cartLines, updateCartLineQty, removeCartLine, updateCartLine, isRemoving, activeCartId } = useCart();
   const {profileData} = useProfile();
 
   const [instructions, setInstructions] = useState('');
@@ -38,6 +39,9 @@ const CartScreen = () => {
   const [expandedId, setExpandedId] = useState(null);
   const [edits, setEdits] = useState({});
   const emptyFloat = useRef(new Animated.Value(0)).current;
+
+  // Track loading state for cart operations (invoice, item updates, removals)
+  const [isCartOperationLoading, setIsCartOperationLoading] = useState(false);
 
   const addOneTempOrderMutation = useMutation({
     mutationKey: ['addOneTempOrder'],
@@ -78,6 +82,39 @@ const CartScreen = () => {
       setCartInvoice(fetchCartInvoiceQuery.data)
     }
   }, [fetchCartInvoiceQuery.data, fetchCartInvoiceQuery.status])
+
+  // Aggregate all cart operation loading states
+  const updateCartItemMutation = useMutation({
+    mutationKey: ['updateCartItem'],
+    mutationFn: async (payload: Partial<CartItem>) => {
+      const response = await updateOneCartItem(payload.id, payload);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      try {
+        // server returned updated CartItem
+        const updated: any = data;
+        updateCartLine(updated.id || updated.cartItemId || updated.itemId, {
+          selectedExtras: updated.additions || updated.additions || [],
+          note: updated.note || ''
+        });
+      } catch (err) {
+        // fallback: show success toast anyway
+      }
+      showToast('success', 'Item updated', 'Your cart item has been updated successfully.');
+    },
+    onError: (error) => {
+      showToast("error", "Update Failed", error.message || "An error occurred while updating your cart item. Please try again.");
+    }
+  })
+
+  React.useEffect(() => {
+    const isLoading = 
+      fetchCartInvoiceQuery.isPending || 
+      isRemoving ||
+      updateCartItemMutation.isPending;
+    setIsCartOperationLoading(isLoading);
+  }, [fetchCartInvoiceQuery.isPending, isRemoving, updateCartItemMutation.isPending]);
 
   useEffect(() => {
     if (cartLines.length !== 0) {
@@ -160,7 +197,6 @@ const CartScreen = () => {
         selectedMap[key] = { quantity: extra.quantity || 1 };
       }
     });
-    console.log("Initializing edit state: ", selectedMap)
     setEdits((prev) => ({ ...prev, [item.cartLineId]: { selectedMap, note: item.note || '' } }));
     setExpandedId(item.cartLineId);
   };
@@ -168,20 +204,7 @@ const CartScreen = () => {
   const renderEditPanel = (item) => {
     const state = edits[item.cartLineId] || { selectedMap: {}, note: item.note || '' };
 
-    const toggleOptionEdit = (extra: CartItemAddition) => {
-      const key = extra.extraId;
-      setEdits((prev) => {
-        const next = { ...(prev[item.cartLineId] || { selectedMap: {}, note: '' }) };
-        const sm = { ...(next.selectedMap || {}) };
-        if (sm[key]) {
-          delete sm[key];
-        } else {
-          sm[key] = { quantity: 1 };
-        }
-        next.selectedMap = sm;
-        return { ...prev, [item.cartLineId]: next };
-      });
-    };
+    // toggling extras selection is disabled here; users can only edit quantities/amounts and notes
 
     const updatePerUnitQtyEdit = (extra: CartItemAddition, delta: number) => {
       const key = extra.extraId;
@@ -232,7 +255,14 @@ const CartScreen = () => {
           };
         })
 
-      updateCartLineExtras(item.cartLineId, selectedExtras, st.note || '');
+      // send full additions list to server via mutation
+      updateCartItemMutation.mutate({ id: item.cartLineId, additions: selectedExtras, note: st.note || '' });
+      // clear local edit state for this item and close panel
+      setEdits((prev) => {
+        const next = { ...prev };
+        delete next[item.cartLineId];
+        return next;
+      });
       setExpandedId(null);
     };
 
@@ -250,9 +280,9 @@ const CartScreen = () => {
             <View key={extra.extraId} style={styles.groupBlockSimple}>
               <Text style={styles.groupTitleSimple}>{extra.extraName}</Text>
               <View key={extra.extraId} style={styles.optionRowSimple}>
-                <TouchableOpacity onPress={() => toggleOptionEdit(extra)}>
+                <View>
                   <Ionicons name={isSelected ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={isSelected ? AUTH_COLORS.primary : AUTH_COLORS.muted} />
-                </TouchableOpacity>
+                </View>
                 <Text style={styles.optionLabelSimple}>{extra.extraName}</Text>
                 {isSelected && extra.pricingMode === 'per_unit' ? (
                   <View style={styles.inlineControlRow}>
@@ -543,11 +573,15 @@ const CartScreen = () => {
             userId: profileData.id,
             deliveryAddressGpsLocation: {lat: currentLocation?.latitude, lng: currentLocation?.longitude},
             deliveryFee: cartInvoice?.deliveryFee,
-            serviceFee: cartInvoice?.serviceFee
+            serviceFee: cartInvoice?.serviceFee,
+            deliveryInstructions: instructions,
           } as RequestBody)}
         />
       </ScrollView>
-      <LoadingBackdrop visible={addOneTempOrderMutation.isPending} message="Processing order..." />
+      <LoadingBackdrop 
+        visible={addOneTempOrderMutation.isPending || isCartOperationLoading} 
+        message={addOneTempOrderMutation.isPending ? "Processing order..." : "Updating cart..."} 
+      />
     </View>
   );
 };

@@ -10,7 +10,7 @@ import { showToast } from '@/utils/notifications';
 import { useQuery } from '@tanstack/react-query';
 import { Store } from '@/schemas/stores';
 import { set } from 'zod';
-import { getGpsDistanceInMeters } from '@/utils/shared';
+import { generateImageUrl, getGpsDistanceInMeters } from '@/utils/shared';
 import { useLocation } from '@/context/LocationContext';
 
 const FavoritesScreen = ({ navigation }: { navigation: any }) => {
@@ -78,7 +78,7 @@ const FavoritesScreen = ({ navigation }: { navigation: any }) => {
       params: {
         id: item.id,
         name: item.name,
-        imageUri: `${process.env.EXPO_PUBLIC_BACKEND_URL}${(item as Store).coverPhoto.fileStoragePath}`,
+        imageUri: generateImageUrl((item as Store).coverPhoto.fileStoragePath),
         rating: item.averageRating,
         isOpen: (item as Store).isOpen,
         averageRating: (item as Store).averageRating,

@@ -10,3 +10,7 @@ export async function getLocations() {
     const locations = await SecureStore.getItemAsync('recent_locations');
     return locations ? JSON.parse(locations) as LocationSchema[] : [];
 }
+
+export async function clearLocations() {
+    await SecureStore.deleteItemAsync('recent_locations');
+}

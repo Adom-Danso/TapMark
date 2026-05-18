@@ -21,6 +21,7 @@ import { MainTabParamList } from '@/schemas/shared';
 import { useQuery } from '@tanstack/react-query';
 import { StoreItem } from '@/schemas/store-items';
 import { StoreItemExtra } from '@/schemas/store-item-extras';
+import { generateImageUrl } from '@/utils/shared';
 
 const NOTE_MAX_LENGTH = 160;
 const parseMoney = (value: unknown): number => {
@@ -206,6 +207,7 @@ const ItemDetailsScreen = ({ route, navigation }: StoreItemDetailScreenProps) =>
   const grandTotal = lineUnitPrice * packageQty;
   const noteValue = note.trim().slice(0, NOTE_MAX_LENGTH);
   const canAdd = validationErrors.length === 0;
+  const resolvedImageUri = generateImageUrl(imageUri || storeItem?.photo?.fileStoragePath || '');
 
   // Ensure packaging has a default selected option when available.
   React.useEffect(() => {
@@ -246,7 +248,7 @@ const ItemDetailsScreen = ({ route, navigation }: StoreItemDetailScreenProps) =>
       storeItemId: id,
       storeId: storeItem?.storeId || '',
       title: name || storeItem?.name || 'Item',
-      imageUri: imageUri || `${process.env.EXPO_PUBLIC_BACKEND_URL}${storeItem?.photo?.fileStoragePath}` || '',
+      imageUri: resolvedImageUri,
       basePrice,
       selectedExtras,
       note: noteValue,
@@ -262,7 +264,6 @@ const ItemDetailsScreen = ({ route, navigation }: StoreItemDetailScreenProps) =>
     }
   };
 
-  console.log("Extras total: ", extrasTotal, selectedMap, selectedExtras)
 
   return (
     <View style={styles.container}>
@@ -270,8 +271,8 @@ const ItemDetailsScreen = ({ route, navigation }: StoreItemDetailScreenProps) =>
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
       >
-        {imageUri ? (
-          <Image source={{ uri: imageUri }} style={styles.image} resizeMode="cover" />
+          {resolvedImageUri ? (
+            <Image source={{ uri: resolvedImageUri }} style={styles.image} resizeMode="cover" />
         ) : null}
 
         <View style={styles.card}>
@@ -333,7 +334,6 @@ const ItemDetailsScreen = ({ route, navigation }: StoreItemDetailScreenProps) =>
               const key = extra.id;
               const selectedState = selectedMap[key];
               const isSelected = Boolean(selectedState);
-              console.log(selectedState, "selected state")
 
               return (
                 <View key={extra.id} style={styles.optionCard}>
@@ -408,7 +408,6 @@ const ItemDetailsScreen = ({ route, navigation }: StoreItemDetailScreenProps) =>
               const key = extra.id;
               const selectedState = selectedMap[key];
               const isSelected = Boolean(selectedState);
-              console.log(selectedState, "selected state")
 
 
               return (

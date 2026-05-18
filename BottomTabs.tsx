@@ -21,6 +21,7 @@ import { useCart } from './src/context/CartContext';
 import { CartProvider } from './src/context/CartContext';
 import { ProfileProvider } from '@/context/ProfileContext';
 import { LocationProvider } from '@/context/LocationContext';
+import { SearchProvider } from '@/context/SearchContext';
 
 const Tab = createBottomTabNavigator();
 
@@ -195,19 +196,21 @@ const BottomTabs = () => {
 		<CartProvider>
 			<ProfileProvider>
 				<LocationProvider>
-					<Tab.Navigator
-						initialRouteName="Home"
-						screenOptions={{ headerShown: false }}
-						lazy={false}
-						detachInactiveScreens={false}
-						tabBar={(props) => <CustomTabBar {...props} />}
-					>
-						<Tab.Screen name="Home" component={HomeStack} />
-						<Tab.Screen name="Cart" component={CartStack} />
-						<Tab.Screen name="Search" component={SearchScreen} />
-						<Tab.Screen name="Favourites" component={FavoritesScreen} />
-						<Tab.Screen name="Profile" component={ProfileStack} />
-					</Tab.Navigator>
+					<SearchProvider>
+						<Tab.Navigator
+							initialRouteName="Home"
+							screenOptions={{ headerShown: false }}
+							lazy={false}
+							detachInactiveScreens={false}
+							tabBar={(props) => <CustomTabBar {...props} />}
+						>
+							<Tab.Screen name="Home" component={HomeStack} />
+							<Tab.Screen name="Cart" component={CartStack} />
+							<Tab.Screen name="Search" component={SearchScreen} />
+							<Tab.Screen name="Favourites" component={FavoritesScreen} />
+							<Tab.Screen name="Profile" component={ProfileStack} />
+						</Tab.Navigator>
+					</SearchProvider>
 				</LocationProvider>
 			</ProfileProvider>
 		</CartProvider>

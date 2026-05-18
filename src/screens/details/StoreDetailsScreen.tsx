@@ -10,6 +10,7 @@ import { showToast } from '@/utils/notifications';
 import { searchStoreItems } from '@/functions/store-items/search-store-items';
 import { StoreItem } from '@/schemas/store-items';
 import { useQuery } from '@tanstack/react-query';
+import { generateImageUrl } from '@/utils/shared';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 type StoreDetailsScreenProps = NativeStackScreenProps<MainTabParamList, 'StoreDetails'>;
@@ -80,7 +81,7 @@ const StoreDetailsScreen = ({ route, navigation }: StoreDetailsScreenProps) => {
     navigation.navigate('ItemDetails', {
       id: item.id,
       name: item.name,
-      imageUri: `${process.env.EXPO_PUBLIC_BACKEND_URL}${item.photo.fileStoragePath}`,
+      imageUri: generateImageUrl(item.photo.fileStoragePath),
       description: item.description,
       price: item.price,
     });
@@ -88,7 +89,7 @@ const StoreDetailsScreen = ({ route, navigation }: StoreDetailsScreenProps) => {
 
   const renderItemCard = (item: StoreItem) => (
     <Pressable key={item.id} style={styles.itemCard} onPress={() => handleItemPress(item)}>
-      <Image source={{ uri: `${process.env.EXPO_PUBLIC_BACKEND_URL}${item.photo.fileStoragePath}` }} style={styles.itemImage} resizeMode="cover" />
+      <Image source={{ uri: generateImageUrl(item.photo.fileStoragePath) }} style={styles.itemImage} resizeMode="cover" />
       <View style={styles.itemBody}>
         <Text style={styles.itemTitle} numberOfLines={2}>
           {item.name}
@@ -109,7 +110,7 @@ const StoreDetailsScreen = ({ route, navigation }: StoreDetailsScreenProps) => {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
         <View style={styles.imageWrap}>
-          <Image source={{ uri: `${process.env.EXPO_PUBLIC_BACKEND_URL}${imageUri}` }} style={styles.image} resizeMode="cover" />
+          <Image source={{ uri: generateImageUrl(imageUri || '') }} style={styles.image} resizeMode="cover" />
           <AnimatedPressable
             onPress={handleFavoritePress}
             hitSlop={8}
@@ -130,7 +131,7 @@ const StoreDetailsScreen = ({ route, navigation }: StoreDetailsScreenProps) => {
           <View style={styles.badgeRow}>
             <View style={styles.statPill}>
               <Ionicons name="bicycle-outline" size={14} color={AUTH_COLORS.primaryDark} />
-              <Text style={styles.statLabel}>{estimatedDeliveryFee}</Text>
+              <Text style={styles.statLabel}>GHS {estimatedDeliveryFee.toFixed(2)}</Text>
             </View>
             <View style={styles.statPill}>
               <Ionicons name="star" size={14} color="#F5A623" />

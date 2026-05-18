@@ -25,3 +25,19 @@ export function getGpsDistanceInMeters(
 
 	return EARTH_RADIUS_METERS * c;
 }
+
+
+export function generateImageUrl(imagePath: string) {
+	if (!imagePath) {
+		return '';
+	}
+
+	if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+		return imagePath;
+	}
+
+	const normalizedPath = imagePath.replace(/\\/g, '/');
+	const photosIndex = normalizedPath.indexOf('photos');
+	const trimmedPath = photosIndex >= 0 ? normalizedPath.slice(photosIndex) : normalizedPath.replace(/^\.?\/?/, '');
+	return `${process.env.EXPO_PUBLIC_BACKEND_URL}/${trimmedPath}`;
+}

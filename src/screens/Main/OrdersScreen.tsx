@@ -1,11 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AUTH_COLORS, AUTH_SPACING } from '../auth/authTheme';
 import OrderCard from '../../components/OrderCard';
-import { ORDERS } from '../../functions/orderData';
 import { useCart } from '../../context/CartContext';
 import { useQuery } from '@tanstack/react-query';
 import { searchOrders } from '@/functions/orders/search-orders';
@@ -13,15 +12,21 @@ import { useProfile } from '@/context/ProfileContext';
 import { showToast } from '@/utils/notifications';
 import { Order } from '@/schemas/orders';
 
+const PAGE_SIZE = 10;
+
 const OrdersScreen = () => {
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const { addCartLine, clearCart } = useCart();
-  const {profileData} = useProfile()
+  const { profileData } = useProfile();
 
-  const [activeTab, setActiveTab] = useState('current');
+  const [activeTab, setActiveTab] = useState<'current' | 'past'>('current');
   const [railWidth, setRailWidth] = useState(0);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [skip, setSkip] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const pillTranslate = useRef(new Animated.Value(0)).current;
   const listOpacity = useRef(new Animated.Value(0)).current;
@@ -31,35 +36,41 @@ const OrdersScreen = () => {
   const activeIndex = activeTab === 'current' ? 0 : 1;
 
   const searchOrdersQuery = useQuery({
-    queryKey: ['searchOrders', activeTab],
+    queryKey: ['searchOrders', activeTab, skip, profileData?.id],
+    enabled: Boolean(profileData?.id),
     queryFn: async () => {
       try {
-        const response = await searchOrders(
-          20,
-          0,
-          profileData?.id || null,
-          activeTab === 'current' ? false : true,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-        )
+        const response = await searchOrders(PAGE_SIZE, skip, profileData?.id || null, activeTab === 'current' ? false : true, null, null, null, null, null, null, null, null, null, null);
         return response.data;
       } catch (error: any) {
-        showToast("error", error.message || "Failed to load orders");
+        showToast('error', error.message || 'Failed to load orders');
         return [];
       }
     }
-  })
-  React.useEffect(()=> {
-    if (searchOrdersQuery.data && searchOrdersQuery.status === 'success') {
-      setOrders(searchOrdersQuery.data);
+  });
+
+  useEffect(() => {
+    setOrders([]);
+    setSkip(0);
+    setHasMore(true);
+    setIsInitialLoading(true);
+    setIsLoadingMore(false);
+  }, [activeTab, profileData?.id]);
+
+  useEffect(() => {
+    if (searchOrdersQuery.status === 'success') {
+      const nextOrders = searchOrdersQuery.data || [];
+      setOrders((prevOrders) => {
+        if (skip === 0) return nextOrders;
+        const existingIds = new Set(prevOrders.map((o) => o.id));
+        const toAppend = nextOrders.filter((o) => !existingIds.has(o.id));
+        return [...prevOrders, ...toAppend];
+      });
+      setHasMore(nextOrders.length === PAGE_SIZE);
+      setIsInitialLoading(false);
+      setIsLoadingMore(false);
     }
-  }, [searchOrdersQuery.data, searchOrdersQuery.status])
+  }, [searchOrdersQuery.data, searchOrdersQuery.status, skip]);
 
   useEffect(() => {
     if (tabWidth === 0) {
@@ -95,110 +106,154 @@ const OrdersScreen = () => {
   };
 
   const handleReorder = (order: Order) => {
-    // Clear existing cart and add items from the order
     clearCart();
-    
-    order.items.forEach((item) => {
+
+    order.cart.cartItems.forEach((item) => {
       addCartLine({
-        itemId: item.id,
-        storeId: order.storeId,
-        title: item.title,
-        basePrice: item.price,
-        qty: item.qty,
+        storeItemId: item.storeItem.id,
+        storeId: item.storeItem.storeId,
+        title: item.storeItem.name,
+        basePrice: item.itemAmount,
+        selectedExtras: item.additions,
+        note: item.note || '',
+        qty: item.quantity,
+        itemAmount: item.itemAmount,
       });
     });
 
-    // Navigate to the store with storeId
     navigation.navigate('Home', {
       screen: 'StoreDetails',
-      params: { id: order.storeId, title: order.storeName },
+      params: {
+        id: order.cart.cartItems[0]?.storeItem.storeId,
+        name: order.cart.cartItems[0]?.storeItem.name || 'Store',
+      },
     });
   };
 
-  const visibleOrders = useMemo(
-    () => ORDERS.filter((order) => (activeTab === 'current' ? order.status === 'pending' : order.status !== 'pending')),
-    [activeTab]
+  const handleLoadMore = () => {
+    if (isInitialLoading || isLoadingMore || searchOrdersQuery.isFetching || !hasMore) {
+      return;
+    }
+
+    setIsLoadingMore(true);
+    setSkip((currentSkip) => currentSkip + PAGE_SIZE);
+  };
+
+  const renderOrderItem = ({ item }: { item: Order }) => (
+    <OrderCard order={item} onPress={() => handleOpenOrder(item)} onReorder={handleReorder} />
   );
-  const orderCards = useMemo(
-    () =>
-      orders.map((order) => (
-        <OrderCard
-          key={order.id}
-          order={order}
-          onPress={() => handleOpenOrder(order)}
-          onReorder={handleReorder}
-        />
-      )),
-    [visibleOrders]
-  );
+
+  const renderEmptyState = () => {
+    if (isInitialLoading) {
+      return (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="small" color={AUTH_COLORS.primary} />
+          <Text style={styles.loadingText}>Loading orders...</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.emptyWrap}>
+        <Text style={styles.emptyTitle}>No orders yet</Text>
+        <Text style={styles.emptyText}>Your current and past orders will appear here.</Text>
+      </View>
+    );
+  };
+
+  const renderFooter = () => {
+    if (!isLoadingMore) {
+      return null;
+    }
+
+    return (
+      <View style={styles.footerWrap}>
+        <ActivityIndicator size="small" color={AUTH_COLORS.primary} />
+        <Text style={styles.footerText}>Loading more orders...</Text>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16 }]}
-        showsVerticalScrollIndicator={false}
+      <Animated.View
+        style={{
+          opacity: listOpacity,
+          transform: [{ translateY: listOffset }],
+          flex: 1,
+        }}
       >
-        <Text style={styles.title}>Orders</Text>
-        <View
-          style={styles.tabRail}
-          onLayout={(event) => setRailWidth(event.nativeEvent.layout.width)}
-        >
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.tabPill,
-              {
-                width: tabWidth,
-                transform: [{ translateX: pillTranslate }],
-              },
+          <FlatList
+            data={orders}
+            renderItem={renderOrderItem}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={[
+              styles.cardList,
+              orders.length === 0 ? styles.cardListEmpty : null,
+              { paddingHorizontal: AUTH_SPACING.screenX, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 80 },
             ]}
+            showsVerticalScrollIndicator={false}
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.4}
+            ListEmptyComponent={renderEmptyState}
+            ListFooterComponent={renderFooter}
+            ListHeaderComponent={
+              <View style={styles.headerContent}>
+                <Text style={styles.title}>Orders</Text>
+                <View
+                  style={styles.tabRail}
+                  onLayout={(event) => setRailWidth(event.nativeEvent.layout.width)}
+                >
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[
+                      styles.tabPill,
+                      {
+                        width: tabWidth,
+                        transform: [{ translateX: pillTranslate }],
+                      },
+                    ]}
+                  />
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={styles.tabButton}
+                    onPress={() => setActiveTab('current')}
+                  >
+                    <Ionicons
+                      name="time-outline"
+                      size={16}
+                      color={activeTab === 'current' ? AUTH_COLORS.primary : AUTH_COLORS.muted}
+                    />
+                    <Text
+                      style={[
+                        styles.tabLabel,
+                        activeTab === 'current' ? styles.tabLabelActive : null,
+                      ]}
+                    >
+                      Current
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={styles.tabButton}
+                    onPress={() => setActiveTab('past')}
+                  >
+                    <Ionicons
+                      name="archive-outline"
+                      size={16}
+                      color={activeTab === 'past' ? AUTH_COLORS.primary : AUTH_COLORS.muted}
+                    />
+                    <Text
+                      style={[styles.tabLabel, activeTab === 'past' ? styles.tabLabelActive : null]}
+                    >
+                      Past
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            }
           />
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.tabButton}
-            onPress={() => setActiveTab('current')}
-          >
-            <Ionicons
-              name="time-outline"
-              size={16}
-              color={activeTab === 'current' ? AUTH_COLORS.primary : AUTH_COLORS.muted}
-            />
-            <Text
-              style={[
-                styles.tabLabel,
-                activeTab === 'current' ? styles.tabLabelActive : null,
-              ]}
-            >
-              Current
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.tabButton}
-            onPress={() => setActiveTab('past')}
-          >
-            <Ionicons
-              name="archive-outline"
-              size={16}
-              color={activeTab === 'past' ? AUTH_COLORS.primary : AUTH_COLORS.muted}
-            />
-            <Text
-              style={[styles.tabLabel, activeTab === 'past' ? styles.tabLabelActive : null]}
-            >
-              Past
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <Animated.View
-          style={{
-            opacity: listOpacity,
-            transform: [{ translateY: listOffset }],
-          }}
-        >
-          <View style={styles.cardList}>{orderCards}</View>
-        </Animated.View>
-      </ScrollView>
+      </Animated.View>
     </View>
   );
 };
@@ -208,15 +263,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: AUTH_COLORS.background,
   },
-  scroll: {
-    paddingHorizontal: AUTH_SPACING.screenX,
-    paddingBottom: 80,
-    gap: 16,
-  },
   title: {
     fontSize: 24,
     fontWeight: '700',
     color: AUTH_COLORS.text,
+  },
+  headerContent: {
+    gap: 16,
+    marginBottom: 16,
   },
   tabRail: {
     flexDirection: 'row',
@@ -266,6 +320,50 @@ const styles = StyleSheet.create({
   },
   cardList: {
     gap: 12,
+    flexGrow: 1,
+  },
+  cardListEmpty: {
+    justifyContent: 'center',
+  },
+  loadingWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+    gap: 10,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: AUTH_COLORS.muted,
+    fontWeight: '600',
+  },
+  emptyWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+    gap: 8,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: AUTH_COLORS.text,
+  },
+  emptyText: {
+    fontSize: 13,
+    color: AUTH_COLORS.muted,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  footerWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+  },
+  footerText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: AUTH_COLORS.muted,
   },
 });
 

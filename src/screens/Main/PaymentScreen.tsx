@@ -150,7 +150,6 @@ const PaymentScreen = ({ route, navigation }) => {
       return response
     },
     onSuccess: (data) => {
-      console.log("Payment initiation response:", data);
       if (data.nextStep == "otp") {
         setOtpModalVisible(true);
       } else {
@@ -296,7 +295,7 @@ const PaymentScreen = ({ route, navigation }) => {
             </Text>
             <TouchableOpacity
               style={styles.addButton}
-              onPress={() => navigation.navigate('ProfileHome')}
+              onPress={() => navigation.getParent().navigate('Profile')}
               activeOpacity={0.9}
             >
               <Ionicons name="add" size={18} color="#fff" />

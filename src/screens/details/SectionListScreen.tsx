@@ -17,8 +17,11 @@ import { useFavorites } from '../../context/FavoritesContext';
 import { searchStores } from '../../functions/stores/search-stores';
 import { Store } from '@/schemas/stores';
 import { useLocation } from '@/context/LocationContext';
-import { getGpsDistanceInMeters } from '@/utils/shared';
+import { generateImageUrl, getGpsDistanceInMeters } from '@/utils/shared';
 import { showToast } from '@/utils/notifications';
+import { useQueries, useQuery } from '@tanstack/react-query';
+import { searchStoreCategories } from '@/functions/store-categories/search-store-categories';
+import { StoreCategories } from '@/schemas/store-categories';
 
 const SORT_OPTIONS = [
   { id: 'top-rated', label: 'Top rated' },
@@ -54,10 +57,33 @@ const SectionListScreen = ({ navigation, route }: { navigation: any; route: any 
   const title = routeParams.title || 'Section';
   const { toggleFavoriteStore, isFavoriteStore } = useFavorites();
   const { currentLocation } = useLocation();
+  const [storeCategories, setStoreCategories] = useState<StoreCategories[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+  const searchStoreCategoriesQuery = useQuery({
+    queryKey: ['storeCategories', routeParams],
+    queryFn: async () => {
+      try {
+        const response = await searchStoreCategories(
+          10000000,
+          0,
+          null,
+        );
+        return response.data;
+      } catch (error: any) {
+        showToast("error", error.message || "Failed to load store categories. Please try again.");
+        return [];
+      }
+    },
+  })
+  React.useEffect(() => {
+    if (searchStoreCategoriesQuery.data && searchStoreCategoriesQuery.status === 'success') {
+      setStoreCategories(searchStoreCategoriesQuery.data);
+    }
+  }, [searchStoreCategoriesQuery.data, searchStoreCategoriesQuery.status]);
 
   const baseParams = useMemo(
     () => ({
@@ -188,8 +214,9 @@ const SectionListScreen = ({ navigation, route }: { navigation: any; route: any 
         params.minimumRating,
       );
       setStores(response?.data || []);
-    } catch (error) {
+    } catch (error: any) {
       setStores([]);
+      showToast('error', error.message || 'Failed to load stores. Please try again.');
       setErrorMessage('Failed to load stores.');
     } finally {
       setIsLoading(false);
@@ -211,7 +238,7 @@ const SectionListScreen = ({ navigation, route }: { navigation: any; route: any 
     navigation.navigate('StoreDetails', {
       id: item.id,
       name: item.name,
-      imageUri: `${process.env.EXPO_PUBLIC_BACKEND_URL}${item.coverPhoto.fileStoragePath}`,
+      imageUri: generateImageUrl(item.coverPhoto.fileStoragePath),
       rating: item.averageRating,
       isOpen: item.isOpen,
       averageRating: item.averageRating,
@@ -292,114 +319,125 @@ const SectionListScreen = ({ navigation, route }: { navigation: any; route: any 
         onRequestClose={() => setIsFilterOpen(false)}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
+          <View style={styles.modalHeaderRow}>
             <Pressable onPress={() => setIsFilterOpen(false)} hitSlop={8}>
               <Ionicons name="close" size={24} color={AUTH_COLORS.text} />
             </Pressable>
             <Text style={styles.modalTitle}>Filters</Text>
-            <Pressable onPress={applyFilters} hitSlop={8}>
-              <Text style={styles.applyText}>Apply</Text>
+            <Pressable onPress={resetFilters} hitSlop={8}>
+              <Text style={styles.clearText}>Clear</Text>
             </Pressable>
           </View>
+
           <ScrollView contentContainerStyle={styles.modalContent}>
-            <Text style={styles.filterLabel}>Sort</Text>
-            <View style={styles.chipRow}>
-              {SORT_OPTIONS.map((option) => (
-                <Pressable
-                  key={option.id}
-                  onPress={() => setDraftSort(draftSort === option.id ? null : option.id)}
-                  style={[
-                    styles.chip,
-                    draftSort === option.id ? styles.chipActive : null,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      draftSort === option.id ? styles.chipTextActive : null,
-                    ]}
+            {/* Sort Card */}
+            <View style={styles.sectionCardAlt}>
+              <Text style={styles.filterLabel}>Sort</Text>
+              <View style={styles.radioList}>
+                {SORT_OPTIONS.map((option) => (
+                  <Pressable
+                    key={option.id}
+                    onPress={() => setDraftSort(draftSort === option.id ? null : option.id)}
+                    style={styles.radioRow}
                   >
-                    {option.label}
-                  </Text>
-                </Pressable>
-              ))}
+                    <View style={[styles.radioOuter, draftSort === option.id ? styles.radioOuterActive : null]}>
+                      {draftSort === option.id ? <View style={styles.radioInner} /> : null}
+                    </View>
+                    <Text style={styles.radioLabel}>{option.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
             </View>
 
-            <Text style={styles.filterLabel}>Rating</Text>
-            <View style={styles.chipRow}>
-              {RATING_OPTIONS.map((option) => (
-                <Pressable
-                  key={option.id}
-                  onPress={() => setDraftRating(draftRating === option.value ? null : option.value)}
-                  style={[
-                    styles.chip,
-                    draftRating === option.value ? styles.chipActive : null,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      draftRating === option.value ? styles.chipTextActive : null,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
+            {/* Offers */}
+            {/* <View style={styles.sectionCardAlt}>
+              <Text style={styles.filterLabel}>Offers</Text>
+              <View style={styles.rowBetween}>
+                <Text style={styles.infoText}>Only show places with discounts or other offers</Text>
+                <Pressable onPress={() => setDraftOffers((s) => !s)} style={[styles.checkbox, draftOffers ? styles.checkboxActive : null]}>
+                  {draftOffers ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}
                 </Pressable>
-              ))}
+              </View>
+            </View> */}
+
+            {/* Rating chips */}
+            <View style={styles.sectionCardAlt}>
+              <Text style={styles.filterLabel}>Rating</Text>
+              <View style={styles.chipRowAlt}>
+                {RATING_OPTIONS.map((option) => (
+                  <Pressable
+                    key={option.id}
+                    onPress={() => setDraftRating(draftRating === option.value ? null : option.value)}
+                    style={[styles.chipAlt, draftRating === option.value ? styles.chipActiveAlt : null]}
+                  >
+                    <Text style={[styles.chipText, draftRating === option.value ? styles.chipTextActive : null]}>{option.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
             </View>
 
-            <Text style={styles.filterLabel}>Distance</Text>
-            <View style={styles.chipRow}>
-              {DISTANCE_OPTIONS.map((option) => (
-                <Pressable
-                  key={option.id}
-                  onPress={() => setDraftDistance(draftDistance === option.value ? null : option.value)}
-                  style={[
-                    styles.chip,
-                    draftDistance === option.value ? styles.chipActive : null,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      draftDistance === option.value ? styles.chipTextActive : null,
-                    ]}
+            {/* Distance */}
+            <View style={styles.sectionCardAlt}>
+              <Text style={styles.filterLabel}>Distance</Text>
+              <View style={styles.chipRowAlt}>
+                {DISTANCE_OPTIONS.map((option) => (
+                  <Pressable
+                    key={option.id}
+                    onPress={() => setDraftDistance(draftDistance === option.value ? null : option.value)}
+                    style={[styles.chipAlt, draftDistance === option.value ? styles.chipActiveAlt : null]}
                   >
-                    {option.label}
-                  </Text>
-                </Pressable>
-              ))}
+                    <Text style={[styles.chipText, draftDistance === option.value ? styles.chipTextActive : null]}>{option.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
             </View>
 
-            <Text style={styles.filterLabel}>Categories</Text>
-            <View style={styles.chipRow}>
-              {CATEGORY_OPTIONS.map((option) => (
-                <Pressable
-                  key={option.id}
-                  onPress={() => toggleCategory(option.id)}
-                  style={[
-                    styles.chip,
-                    draftCategories.includes(option.id) ? styles.chipActive : null,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      draftCategories.includes(option.id) ? styles.chipTextActive : null,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
+            {/* Pickup & Schedule */}
+            {/* <View style={styles.sectionCardAlt}>
+              <Text style={styles.filterLabel}>Pickup</Text>
+              <View style={styles.rowBetween}>
+                <Text style={styles.infoText}>Only show places with the option to collect orders yourself</Text>
+                <Pressable onPress={() => setDraftPickup((s) => !s)} style={[styles.checkbox, draftPickup ? styles.checkboxActive : null]}>
+                  {draftPickup ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}
                 </Pressable>
-              ))}
+              </View>
+            </View> */}
+
+            {/* <View style={styles.sectionCardAlt}>
+              <Text style={styles.filterLabel}>Schedule</Text>
+              <View style={styles.rowBetween}>
+                <Text style={styles.infoText}>Only show places with the option to schedule for later</Text>
+                <Pressable onPress={() => setDraftSchedule((s) => !s)} style={[styles.checkbox, draftSchedule ? styles.checkboxActive : null]}>
+                  {draftSchedule ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}
+                </Pressable>
+              </View>
+            </View> */}
+
+            {/* Categories list */}
+            <View style={styles.sectionCardAltLast}>
+              <Text style={styles.filterLabel}>Categories</Text>
+              {storeCategories.length > 0 ? (
+                storeCategories.map((option) => (
+                  <Pressable key={option.id} onPress={() => toggleCategory(option.id)} style={styles.categoryLine}>
+                    <Text style={styles.categoryLineText}>{option.name}</Text>
+                    <Pressable onPress={() => toggleCategory(option.id)} style={[styles.checkbox, draftCategories.includes(option.id) ? styles.checkboxActive : null]}>
+                      {draftCategories.includes(option.id) ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}
+                    </Pressable>
+                  </Pressable>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>No categories available</Text>
+              )}
             </View>
 
-            <View style={styles.modalFooter}>
-              <Pressable onPress={resetFilters} style={styles.resetButton}>
-                <Text style={styles.resetText}>Reset</Text>
-              </Pressable>
-            </View>
+            <View style={{ height: 120 }} />
           </ScrollView>
+
+          <View style={styles.applyBar}>
+            <Pressable style={styles.applyButton} onPress={applyFilters}>
+              <Text style={styles.applyButtonText}>Apply</Text>
+            </Pressable>
+          </View>
         </View>
       </Modal>
     </View>
@@ -468,10 +506,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  modalHeaderRow: {
+    paddingTop: 18,
+    paddingBottom: 12,
+    paddingHorizontal: AUTH_SPACING.screenX,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: AUTH_COLORS.text,
+  },
+  clearText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: AUTH_COLORS.muted,
   },
   applyText: {
     fontSize: 14,
@@ -482,6 +533,106 @@ const styles = StyleSheet.create({
     paddingHorizontal: AUTH_SPACING.screenX,
     paddingBottom: 40,
     gap: 16,
+  },
+  sectionCardAlt: {
+    backgroundColor: AUTH_COLORS.card,
+    borderRadius: AUTH_RADII.card,
+    padding: 14,
+    gap: 10,
+  },
+  sectionCardAltLast: {
+    backgroundColor: AUTH_COLORS.card,
+    borderRadius: AUTH_RADII.card,
+    padding: 14,
+    gap: 10,
+    marginBottom: 10,
+  },
+  radioList: {
+    marginTop: 6,
+    gap: 8,
+  },
+  radioRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 8,
+  },
+  radioOuter: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: AUTH_COLORS.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioOuterActive: {
+    borderColor: AUTH_COLORS.primary,
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: AUTH_COLORS.primary,
+  },
+  radioLabel: {
+    fontSize: 14,
+    color: AUTH_COLORS.text,
+    fontWeight: '600',
+  },
+  rowBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  infoText: {
+    color: AUTH_COLORS.muted,
+    flex: 1,
+    marginRight: 8,
+    fontSize: 13,
+  },
+  checkbox: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: AUTH_COLORS.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: AUTH_COLORS.card,
+  },
+  checkboxActive: {
+    backgroundColor: AUTH_COLORS.primary,
+    borderColor: AUTH_COLORS.primary,
+  },
+  chipRowAlt: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 6,
+  },
+  chipAlt: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: AUTH_RADII.pill,
+    borderWidth: 1,
+    borderColor: AUTH_COLORS.line,
+    backgroundColor: AUTH_COLORS.background,
+  },
+  chipActiveAlt: {
+    backgroundColor: AUTH_COLORS.primary,
+    borderColor: AUTH_COLORS.primary,
+  },
+  categoryLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+  },
+  categoryLineText: {
+    fontSize: 14,
+    color: AUTH_COLORS.text,
   },
   filterLabel: {
     fontSize: 14,
@@ -530,6 +681,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: AUTH_COLORS.text,
+  },
+  applyBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    padding: 16,
+    backgroundColor: AUTH_COLORS.background,
+    borderTopWidth: 1,
+    borderTopColor: AUTH_COLORS.line,
+  },
+  applyButton: {
+    backgroundColor: AUTH_COLORS.primary,
+    paddingVertical: 14,
+    borderRadius: AUTH_RADII.pill,
+    alignItems: 'center',
+  },
+  applyButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16,
   },
 });
 

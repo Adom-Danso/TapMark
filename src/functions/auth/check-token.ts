@@ -1,28 +1,20 @@
 import { SuccessResponse } from "@/schemas/shared";
+import { StoreItem } from "@/schemas/store-items";
 import { ApiError } from "@/schemas/shared";
 import { axiosInstance } from "@/utils/axios-instance";
 import axios from "axios";
-import { Payment } from "@/schemas/payments";
+import { CartInvoice } from "@/schemas/cart";
 
-export type RequestBody = {
-    userId: string, 
-    cartId: string, 
-    amount: number, 
-    tempOrderId: string;
-    paymentMethod: string;
-    mobileMoney?: object;
-    bank?: object;
-}
 
-export async function addOnePayment(
-    payload: RequestBody
-): Promise<SuccessResponse<Payment>> {
+export async function checkUserTokens(
+): Promise<any> {
     try {
-        const response = await axiosInstance.post(`/payments`, payload);
-        return response.data as SuccessResponse<Payment>;
+        const response = await axiosInstance.get(`/auth/check-token`);
+        return response.data as any;
     } catch (error) {
         if (axios.isAxiosError(error)) {
             if (error.response) {
+
                 if (typeof error.response.data.detail === 'string') {
                     throw new ApiError(error.response.data.detail, error.response.status);
                 } else {
