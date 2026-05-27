@@ -66,7 +66,7 @@ const LoginPage = ({ navigation }: LoginProps) => {
 				<ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
 					<View style={styles.heroWrap}>
 						<Image
-							source={require('../../../assets/RestaurantCovers/sample.png')}
+							source={require('../../../assets/auth-logo.png')}
 							resizeMode="cover"
 							style={styles.heroImage}
 						/>

@@ -6,6 +6,12 @@ export const axiosInstance = axios.create({
     baseURL: process.env.EXPO_PUBLIC_BACKEND_URL,
 });
 
+// Runtime debug: show which baseURL is being used and log failed responses
+if (process.env.NODE_ENV !== 'production') {
+    // eslint-disable-next-line no-console
+    console.log('axios baseURL =', process.env.EXPO_PUBLIC_BACKEND_URL);
+}
+
 axiosInstance.interceptors.request.use(async config => {
     const { accessToken, refreshToken } = await getTokens();
 
@@ -26,3 +32,24 @@ axiosInstance.interceptors.request.use(async config => {
 
     return config;
 });
+
+axiosInstance.interceptors.response.use(
+    response => response,
+    error => {
+        try {
+            // eslint-disable-next-line no-console
+            console.log('AXIOS ERROR', {
+                url: error.config?.url,
+                method: error.config?.method,
+                baseURL: error.config?.baseURL,
+                status: error.response?.status,
+                data: error.response?.data,
+                message: error.message,
+            });
+        } catch (e) {
+            // ignore logging errors
+        }
+
+        return Promise.reject(error);
+    }
+);

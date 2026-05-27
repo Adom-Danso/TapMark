@@ -265,10 +265,10 @@ const OrderCard = ({ order, onPress, onReorder }: { order: Order; onPress: () =>
           </ProgressDots>
         )}
 
-        <Divider />
+        {/* <Divider /> */}
 
         {/* Bottom Row: Total & Reorder Button */}
-        <BottomRow>
+        {/* <BottomRow>
           <TotalValue>GHS {order.payment.amount.toFixed(2)}</TotalValue>
           {onReorder && (
             <Animated.View style={{ transform: [{ scale: reorderScaleAnim }] }}>
@@ -282,7 +282,7 @@ const OrderCard = ({ order, onPress, onReorder }: { order: Order; onPress: () =>
               </ReorderButton>
             </Animated.View>
           )}
-        </BottomRow>
+        </BottomRow> */}
       </CardPressable>
     </Animated.View>
   );

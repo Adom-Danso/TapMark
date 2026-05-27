@@ -1,0 +1,200 @@
+diff --git a/src/screens/Main/CartScreen.tsx b/src/screens/Main/CartScreen.tsx
+index 01e0b47..453c2e6 100644
+--- a/src/screens/Main/CartScreen.tsx
++++ b/src/screens/Main/CartScreen.tsx
+@@ -10,9 +10,6 @@ import { useCart } from '../../context/CartContext';
+ import SwipeToConfirm from '../../components/SwipeToConfirm';
+ import LoadingBackdrop from '../../components/LoadingBackdrop';
+ import { showToast } from '@/utils/notifications';
+-import { getOneCartById } from '@/functions/cart/get-one-cart-by-id';
+-import { getActiveCartId, saveActiveCartId } from '@/utils/cart';
+-import { addOneCart } from '@/functions/cart/add-one-cart';
+ import { useMutation, useQuery } from '@tanstack/react-query';
+ import { CartItem, CartItemAddition } from '@/schemas/cart-items';
+ import { addOneTempOrder, RequestBody } from '@/functions/orders/add-one-temp-order';
+@@ -23,15 +20,33 @@ import { updateOneCartItem } from '@/functions/cart-items/update-cart-item-by-id
+ 
+ const PAYMENT_METHODS = [
+   { id: 'mobile-money', label: 'Mobile Money', icon: 'phone-portrait-outline' },
+-  { id: 'bank', label: 'Bank', icon: 'card-outline' },
++  // { id: 'bank', label: 'Bank', icon: 'card-outline' },
+ ];
+ 
++const parseMoney = (value: unknown): number => {
++  if (typeof value === 'number') {
++    return Number.isFinite(value) ? value : 0;
++  }
++
++  if (typeof value === 'string') {
++    const parsed = Number.parseFloat(value.replace(/[^\d.]/g, ''));
++    return Number.isFinite(parsed) ? parsed : 0;
++  }
++
++  return 0;
++};
++
++type EditSelectionState = {
++  quantity?: number;
++  amount?: string;
++};
++
+ const CartScreen = () => {
+   const navigation = useNavigation();
+   const insets = useSafeAreaInsets();
+   const { currentLocation } = useLocation();
+-  const { cartLines, updateCartLineQty, removeCartLine, updateCartLine, isRemoving, activeCartId } = useCart();
+-  const {profileData} = useProfile();
++  const { cartLines, updateCartLineQty, removeCartLine, updateCartLine, isRemoving, activeCartId, updateCartLineItemAmount } = useCart();
++  const { profileData } = useProfile();
+ 
+   const [instructions, setInstructions] = useState('');
+   const [paymentMethod, setPaymentMethod] = useState('mobile-money');
+@@ -77,8 +92,8 @@ const CartScreen = () => {
+     queryFn: fetchCartInvoice,
+     enabled: !!activeCartId && !!currentLocation
+   });
+-  React.useEffect(()=>{
+-    if (fetchCartInvoiceQuery.data && fetchCartInvoiceQuery.status=="success") {
++  React.useEffect(() => {
++    if (fetchCartInvoiceQuery.data && fetchCartInvoiceQuery.status == "success") {
+       setCartInvoice(fetchCartInvoiceQuery.data)
+     }
+   }, [fetchCartInvoiceQuery.data, fetchCartInvoiceQuery.status])
+@@ -109,8 +124,8 @@ const CartScreen = () => {
+   })
+ 
+   React.useEffect(() => {
+-    const isLoading = 
+-      fetchCartInvoiceQuery.isPending || 
++    const isLoading =
++      fetchCartInvoiceQuery.isPending ||
+       isRemoving ||
+       updateCartItemMutation.isPending;
+     setIsCartOperationLoading(isLoading);
+@@ -142,9 +157,27 @@ const CartScreen = () => {
+   }, [cartLines.length, emptyFloat]);
+ 
+ 
+-  const handleIncrease = (cartLineId: string) => updateCartLineQty(cartLineId, 1);
++  const handleIncrease = (cartLineId: string) => {
++    // const lineToUpdate = cartLines.find(value => value.cartLineId == cartLineId)
++    // if (lineToUpdate) {
++    //   updateCartItemMutation.mutate({ quantity: lineToUpdate.qty + 1 })
++    // }
++
++    updateCartLineQty(cartLineId, 1);
++  }
++
++  const handleDecrease = (cartLineId: string) => {
++    // const lineToUpdate = cartLines.find(value => value.cartLineId == cartLineId)
++    // if (lineToUpdate) {
++    //   updateCartItemMutation.mutate({ quantity: lineToUpdate.qty - 1 })
++    // }
+ 
+-  const handleDecrease = (cartLineId: string) => updateCartLineQty(cartLineId, -1);
++    updateCartLineQty(cartLineId, -1)
++  };
++
++  const handleUpdateItemAmount = (cartLineId: string, amount: number) => {
++    updateCartItemMutation.mutate({ id: cartLineId, itemAmount: amount })
++  }
+ 
+   const handleRemove = (cartLineId: string) => {
+     removeCartLine(cartLineId)
+@@ -428,36 +461,47 @@ const CartScreen = () => {
+                       </Text>
+                     ) : null}
+                     {item.note ? <Text style={styles.itemNote}>Note: {item.note}</Text> : null}
+-                    <View style={styles.itemMetaRow}>
+-                      <TouchableOpacity
+-                        activeOpacity={0.8}
+-                        onPress={() => handleDecrease(item.cartLineId)}
+-                        style={styles.qtyButton}
+-                      >
+-                        <Ionicons name="remove" size={16} color={AUTH_COLORS.text} />
+-                      </TouchableOpacity>
+-                      <Text style={styles.qtyValue}>{item.qty}</Text>
+-                      <TouchableOpacity
+-                        activeOpacity={0.8}
+-                        onPress={() => handleIncrease(item.cartLineId)}
+-                        style={styles.qtyButton}
+-                      >
+-                        <Ionicons name="add" size={16} color={AUTH_COLORS.text} />
+-                      </TouchableOpacity>
++                    {item.isSoldPerUnit ? (
++                      <View style={styles.itemMetaRow}>
++                        <TouchableOpacity
++                          activeOpacity={0.8}
++                          onPress={() => handleDecrease(item.cartLineId)}
++                          style={styles.qtyButton}
++                        >
++                          <Ionicons name="remove" size={16} color={AUTH_COLORS.text} />
++                        </TouchableOpacity>
++                        <Text style={styles.qtyValue}>{item.qty}</Text>
++                        <TouchableOpacity
++                          activeOpacity={0.8}
++                          onPress={() => handleIncrease(item.cartLineId)}
++                          style={styles.qtyButton}
++                        >
++                          <Ionicons name="add" size={16} color={AUTH_COLORS.text} />
++                        </TouchableOpacity>
+ 
+-                      <TouchableOpacity
+-                        activeOpacity={0.85}
+-                        onPress={() => toggleEdit(item)}
+-                        style={[styles.editPill, expandedId === item.cartLineId ? styles.editPillActive : null]}
+-                      >
+-                        <Ionicons
+-                          name={expandedId === item.cartLineId ? 'chevron-up-outline' : 'chevron-down-outline'}
+-                          size={16}
+-                          color={expandedId === item.cartLineId ? '#fff' : AUTH_COLORS.primary}
++                        <TouchableOpacity
++                          activeOpacity={0.85}
++                          onPress={() => toggleEdit(item)}
++                          style={[styles.editPill, expandedId === item.cartLineId ? styles.editPillActive : null]}
++                        >
++                          <Ionicons
++                            name={expandedId === item.cartLineId ? 'chevron-up-outline' : 'chevron-down-outline'}
++                            size={16}
++                            color={expandedId === item.cartLineId ? '#fff' : AUTH_COLORS.primary}
++                          />
++                          <Text style={[styles.editPillText, expandedId === item.cartLineId ? styles.editPillTextActive : null]}>{expandedId === item.cartLineId ? 'Close' : 'Edit'}</Text>
++                        </TouchableOpacity>
++                      </View>
++                    ) : (
++                      <View>
++                        <TextInput
++                          value={item.itemAmount.toString()}
++                          onChangeText={(t) => updateCartLineItemAmount(item.cartLineId, parseMoney(t))}
++                          keyboardType="decimal-pad"
++                          style={styles.amountInputSimple}
+                         />
+-                        <Text style={[styles.editPillText, expandedId === item.cartLineId ? styles.editPillTextActive : null]}>{expandedId === item.cartLineId ? 'Close' : 'Edit'}</Text>
+-                      </TouchableOpacity>
+-                    </View>
++                      </View>
++                    )}
+                   </View>
+                   <View style={styles.itemActions}>
+                     <Text style={styles.itemPrice}>GHS {item.lineTotal.toFixed(2)}</Text>
+@@ -571,16 +615,16 @@ const CartScreen = () => {
+           onComplete={() => addOneTempOrderMutation.mutate({
+             cartId: activeCartId,
+             userId: profileData.id,
+-            deliveryAddressGpsLocation: {lat: currentLocation?.latitude, lng: currentLocation?.longitude},
++            deliveryAddressGpsLocation: { lat: currentLocation?.latitude, lng: currentLocation?.longitude },
+             deliveryFee: cartInvoice?.deliveryFee,
+             serviceFee: cartInvoice?.serviceFee,
+             deliveryInstructions: instructions,
+           } as RequestBody)}
+         />
+       </ScrollView>
+-      <LoadingBackdrop 
+-        visible={addOneTempOrderMutation.isPending || isCartOperationLoading} 
+-        message={addOneTempOrderMutation.isPending ? "Processing order..." : "Updating cart..."} 
++      <LoadingBackdrop
++        visible={addOneTempOrderMutation.isPending || isCartOperationLoading}
++        message={addOneTempOrderMutation.isPending ? "Processing order..." : "Updating cart..."}
+       />
+     </View>
+   );

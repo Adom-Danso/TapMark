@@ -6,13 +6,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from '../auth/authTheme';
 import { useLocation } from '../../context/LocationContext';
-import { useCart } from '../../context/CartContext';
+import { CartLineType, useCart } from '../../context/CartContext';
 import SwipeToConfirm from '../../components/SwipeToConfirm';
 import LoadingBackdrop from '../../components/LoadingBackdrop';
 import { showToast } from '@/utils/notifications';
-import { getOneCartById } from '@/functions/cart/get-one-cart-by-id';
-import { getActiveCartId, saveActiveCartId } from '@/utils/cart';
-import { addOneCart } from '@/functions/cart/add-one-cart';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { CartItem, CartItemAddition } from '@/schemas/cart-items';
 import { addOneTempOrder, RequestBody } from '@/functions/orders/add-one-temp-order';
@@ -23,25 +20,37 @@ import { updateOneCartItem } from '@/functions/cart-items/update-cart-item-by-id
 
 const PAYMENT_METHODS = [
   { id: 'mobile-money', label: 'Mobile Money', icon: 'phone-portrait-outline' },
-  { id: 'bank', label: 'Bank', icon: 'card-outline' },
+  { id: 'tapmark-wallet', label: 'Tapmark Wallet', icon: 'wallet-outline' },
+  // { id: 'bank', label: 'Bank', icon: 'card-outline' },
 ];
+
+const parseMoney = (value: unknown): number => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value.replace(/[^\d.]/g, ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
+};
 
 const CartScreen = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { currentLocation } = useLocation();
-  const { cartLines, updateCartLineQty, removeCartLine, updateCartLine, isRemoving, activeCartId } = useCart();
-  const {profileData} = useProfile();
+  const { currentLocation, isLoading: isLocationLoading } = useLocation();
+  const { cartLines, updateCartLineQty, removeCartLine, updateCartLine, isRemoving, activeCartId, updateCartLineItemAmount } = useCart();
+  const { profileData, userWallet } = useProfile();
 
   const [instructions, setInstructions] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('mobile-money');
   const [cartInvoice, setCartInvoice] = useState<CartInvoice | null>(null)
   const [expandedId, setExpandedId] = useState(null);
   const [edits, setEdits] = useState({});
+  const [amountEdits, setAmountEdits] = useState<Record<string, string>>({});
   const emptyFloat = useRef(new Animated.Value(0)).current;
-
-  // Track loading state for cart operations (invoice, item updates, removals)
-  const [isCartOperationLoading, setIsCartOperationLoading] = useState(false);
 
   const addOneTempOrderMutation = useMutation({
     mutationKey: ['addOneTempOrder'],
@@ -77,8 +86,8 @@ const CartScreen = () => {
     queryFn: fetchCartInvoice,
     enabled: !!activeCartId && !!currentLocation
   });
-  React.useEffect(()=>{
-    if (fetchCartInvoiceQuery.data && fetchCartInvoiceQuery.status=="success") {
+  React.useEffect(() => {
+    if (fetchCartInvoiceQuery.data && fetchCartInvoiceQuery.status == "success") {
       setCartInvoice(fetchCartInvoiceQuery.data)
     }
   }, [fetchCartInvoiceQuery.data, fetchCartInvoiceQuery.status])
@@ -108,13 +117,11 @@ const CartScreen = () => {
     }
   })
 
-  React.useEffect(() => {
-    const isLoading = 
-      fetchCartInvoiceQuery.isPending || 
-      isRemoving ||
-      updateCartItemMutation.isPending;
-    setIsCartOperationLoading(isLoading);
-  }, [fetchCartInvoiceQuery.isPending, isRemoving, updateCartItemMutation.isPending]);
+  const isCartOperationLoading =
+    isLocationLoading ||
+    fetchCartInvoiceQuery.isPending ||
+    isRemoving ||
+    updateCartItemMutation.isPending;
 
   useEffect(() => {
     if (cartLines.length !== 0) {
@@ -142,9 +149,49 @@ const CartScreen = () => {
   }, [cartLines.length, emptyFloat]);
 
 
-  const handleIncrease = (cartLineId: string) => updateCartLineQty(cartLineId, 1);
+  const handleIncrease = (cartLineId: string) => {
+    // const lineToUpdate = cartLines.find(value => value.cartLineId == cartLineId)
+    // if (lineToUpdate) {
+    //   updateCartItemMutation.mutate({ quantity: lineToUpdate.qty + 1 })
+    // }
 
-  const handleDecrease = (cartLineId: string) => updateCartLineQty(cartLineId, -1);
+    updateCartLineQty(cartLineId, 1);
+  }
+
+  const handleDecrease = (cartLineId: string) => {
+    // const lineToUpdate = cartLines.find(value => value.cartLineId == cartLineId)
+    // if (lineToUpdate) {
+    //   updateCartItemMutation.mutate({ quantity: lineToUpdate.qty - 1 })
+    // }
+
+    updateCartLineQty(cartLineId, -1)
+  };
+
+  const handleUpdateItemAmount = (cartLineId: string, amount: number) => {
+    updateCartLineItemAmount(cartLineId, amount);
+  }
+
+  const handleAmountEditChange = (cartLineId: string, amount: string) => {
+    setAmountEdits((prev) => ({ ...prev, [cartLineId]: amount }));
+  };
+
+  const handleAmountEditSave = (cartLineId: string) => {
+    const draftAmount = amountEdits[cartLineId];
+    handleUpdateItemAmount(cartLineId, parseMoney(draftAmount ?? ''));
+    setAmountEdits((prev) => {
+      const next = { ...prev };
+      delete next[cartLineId];
+      return next;
+    });
+  };
+
+  const handleAmountEditCancel = (cartLineId: string) => {
+    setAmountEdits((prev) => {
+      const next = { ...prev };
+      delete next[cartLineId];
+      return next;
+    });
+  };
 
   const handleRemove = (cartLineId: string) => {
     removeCartLine(cartLineId)
@@ -164,24 +211,30 @@ const CartScreen = () => {
     const parentNav = navigation.getParent();
     if (parentNav) {
       // navigate to the Home tab's MapPicker screen
-      navigation.navigate('Home', { screen: 'MapPicker' });
+      navigation.navigate('Home', { screen: 'MapPicker', params: { origin: 'cart' } });
       return;
     }
-    navigation.navigate('MapPicker');
+    navigation.navigate('MapPicker', { origin: 'cart' });
   };
 
-  const region = {
-    latitude: currentLocation?.latitude,
-    longitude: currentLocation?.longitude,
-    latitudeDelta: 0.015,
-    longitudeDelta: 0.015,
-  };
-  const markerCoord = {
-    latitude: currentLocation?.latitude,
-    longitude: currentLocation?.longitude,
-  };
+  const hasMapCoordinates =
+    typeof currentLocation?.latitude === 'number' && typeof currentLocation?.longitude === 'number';
+  const region = hasMapCoordinates
+    ? {
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        latitudeDelta: 0.015,
+        longitudeDelta: 0.015,
+      }
+    : undefined;
+  const markerCoord = hasMapCoordinates
+    ? {
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+      }
+    : undefined;
 
-  const toggleEdit = (item) => {
+  const toggleEdit = (item: CartLineType) => {
     if (expandedId === item.cartLineId) {
       setExpandedId(null);
       return;
@@ -201,7 +254,7 @@ const CartScreen = () => {
     setExpandedId(item.cartLineId);
   };
 
-  const renderEditPanel = (item) => {
+  const renderEditPanel = (item: CartLineType) => {
     const state = edits[item.cartLineId] || { selectedMap: {}, note: item.note || '' };
 
     // toggling extras selection is disabled here; users can only edit quantities/amounts and notes
@@ -254,9 +307,10 @@ const CartScreen = () => {
             quantity: Number.parseInt(String(state.quantity || 1), 10) || 1,
           };
         })
+      console.log({ id: item.cartLineId, additions: selectedExtras, note: st.note || '' })
 
       // send full additions list to server via mutation
-      updateCartItemMutation.mutate({ id: item.cartLineId, additions: selectedExtras, note: st.note || '' });
+      updateCartItemMutation.mutate({ id: item.cartLineId, additions: selectedExtras.length > 0 ? selectedExtras : null, note: st.note || '' });
       // clear local edit state for this item and close panel
       setEdits((prev) => {
         const next = { ...prev };
@@ -310,7 +364,9 @@ const CartScreen = () => {
 
         <TextInput
           value={state.note}
-          onChangeText={(t) => setEdits((prev) => ({ ...prev, [item.cartLineId]: { ...(prev[item.cartLineId] || {}), note: t } }))}
+          onChangeText={(t) => {
+            setEdits((prev) => ({ ...prev, [item.cartLineId]: { ...(prev[item.cartLineId] || {}), note: t } }))
+          }}
           placeholder="Note (optional)"
           placeholderTextColor={AUTH_COLORS.muted}
           style={styles.noteInputSimple}
@@ -429,34 +485,68 @@ const CartScreen = () => {
                     ) : null}
                     {item.note ? <Text style={styles.itemNote}>Note: {item.note}</Text> : null}
                     <View style={styles.itemMetaRow}>
-                      <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={() => handleDecrease(item.cartLineId)}
-                        style={styles.qtyButton}
-                      >
-                        <Ionicons name="remove" size={16} color={AUTH_COLORS.text} />
-                      </TouchableOpacity>
-                      <Text style={styles.qtyValue}>{item.qty}</Text>
-                      <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={() => handleIncrease(item.cartLineId)}
-                        style={styles.qtyButton}
-                      >
-                        <Ionicons name="add" size={16} color={AUTH_COLORS.text} />
-                      </TouchableOpacity>
+                    {
+                      item.isSoldPerUnit ? (
+                        <>
+                          <TouchableOpacity
+                            activeOpacity={0.8}
+                            onPress={() => handleDecrease(item.cartLineId)}
+                            style={styles.qtyButton}
+                          >
+                            <Ionicons name="remove" size={16} color={AUTH_COLORS.text} />
+                          </TouchableOpacity>
+                          <Text style={styles.qtyValue}>{item.qty}</Text>
+                          <TouchableOpacity
+                            activeOpacity={0.8}
+                            onPress={() => handleIncrease(item.cartLineId)}
+                            style={styles.qtyButton}
+                          >
+                            <Ionicons name="add" size={16} color={AUTH_COLORS.text} />
+                          </TouchableOpacity>
+                        </>
 
-                      <TouchableOpacity
-                        activeOpacity={0.85}
-                        onPress={() => toggleEdit(item)}
-                        style={[styles.editPill, expandedId === item.cartLineId ? styles.editPillActive : null]}
-                      >
-                        <Ionicons
-                          name={expandedId === item.cartLineId ? 'chevron-up-outline' : 'chevron-down-outline'}
-                          size={16}
-                          color={expandedId === item.cartLineId ? '#fff' : AUTH_COLORS.primary}
-                        />
-                        <Text style={[styles.editPillText, expandedId === item.cartLineId ? styles.editPillTextActive : null]}>{expandedId === item.cartLineId ? 'Close' : 'Edit'}</Text>
-                      </TouchableOpacity>
+                      ) : (
+                        <View>
+                          {(() => {
+                            const draftAmount = amountEdits[item.cartLineId];
+                            const hasUncommittedAmountChange = draftAmount !== undefined && draftAmount !== item.itemAmount.toString();
+
+                            return (
+                              <>
+                          <TextInput
+                            value={amountEdits[item.cartLineId] ?? item.itemAmount.toString()}
+                            onChangeText={(t) => handleAmountEditChange(item.cartLineId, t)}
+                            keyboardType="decimal-pad"
+                            style={styles.amountInputSimple}
+                            />
+                              {hasUncommittedAmountChange ? (
+                                <View style={styles.editActionsRow}>
+                                  <TouchableOpacity style={styles.saveButton} onPress={() => handleAmountEditSave(item.cartLineId)}>
+                                    <Text style={styles.saveText}>Save</Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity style={styles.cancelButton} onPress={() => handleAmountEditCancel(item.cartLineId)}>
+                                    <Text style={styles.cancelText}>Cancel</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              ) : null}
+                              </>
+                            );
+                          })()}
+                        </View>
+                      )
+                    }
+                          <TouchableOpacity
+                            activeOpacity={0.85}
+                            onPress={() => toggleEdit(item)}
+                            style={[styles.editPill, expandedId === item.cartLineId ? styles.editPillActive : null]}
+                          >
+                            <Ionicons
+                              name={expandedId === item.cartLineId ? 'chevron-up-outline' : 'chevron-down-outline'}
+                              size={16}
+                              color={expandedId === item.cartLineId ? '#fff' : AUTH_COLORS.primary}
+                            />
+                            <Text style={[styles.editPillText, expandedId === item.cartLineId ? styles.editPillTextActive : null]}>{expandedId === item.cartLineId ? 'Close' : 'Edit'}</Text>
+                          </TouchableOpacity>
                     </View>
                   </View>
                   <View style={styles.itemActions}>
@@ -518,9 +608,13 @@ const CartScreen = () => {
             {currentLocation?.latitude.toFixed(5)}, {currentLocation?.longitude.toFixed(5)}
           </Text>
           <TouchableOpacity activeOpacity={0.9} onPress={handleOpenMap} style={styles.mapPreview}>
-            <MapView style={styles.map} region={region} pointerEvents="none">
-              <Marker coordinate={markerCoord} pinColor={AUTH_COLORS.primary} />
-            </MapView>
+            {hasMapCoordinates && region && markerCoord ? (
+              <MapView style={styles.map} region={region} pointerEvents="none">
+                <Marker coordinate={markerCoord} pinColor={AUTH_COLORS.primary} />
+              </MapView>
+            ) : (
+              <View style={styles.map} />
+            )}
             <View style={styles.mapOverlay}>
               <Ionicons name="navigate" size={16} color={AUTH_COLORS.primary} />
               <Text style={styles.mapOverlayText}>Tap to choose location</Text>
@@ -548,6 +642,7 @@ const CartScreen = () => {
                 <TouchableOpacity
                   key={method.id}
                   activeOpacity={0.85}
+                  disabled={method.id=="tapmark-wallet" && userWallet.availableBalance < (cartInvoice ? cartInvoice.totalAmount : 0)}
                   style={[styles.paymentItem, isActive ? styles.paymentItemActive : null]}
                   onPress={() => setPaymentMethod(method.id)}
                 >
@@ -571,16 +666,16 @@ const CartScreen = () => {
           onComplete={() => addOneTempOrderMutation.mutate({
             cartId: activeCartId,
             userId: profileData.id,
-            deliveryAddressGpsLocation: {lat: currentLocation?.latitude, lng: currentLocation?.longitude},
+            deliveryAddressGpsLocation: { lat: currentLocation?.latitude, lng: currentLocation?.longitude },
             deliveryFee: cartInvoice?.deliveryFee,
             serviceFee: cartInvoice?.serviceFee,
             deliveryInstructions: instructions,
           } as RequestBody)}
         />
       </ScrollView>
-      <LoadingBackdrop 
-        visible={addOneTempOrderMutation.isPending || isCartOperationLoading} 
-        message={addOneTempOrderMutation.isPending ? "Processing order..." : "Updating cart..."} 
+      <LoadingBackdrop
+        visible={addOneTempOrderMutation.isPending || isCartOperationLoading}
+        message={addOneTempOrderMutation.isPending ? "Processing order..." : "Updating cart..."}
       />
     </View>
   );

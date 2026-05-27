@@ -10,6 +10,12 @@ import {
 } from 'react-native';
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from './authTheme';
 
+const IMAGES = [require('../../../assets/welcome1.png'), require('../../../assets/welcome2.png')];
+const chosenImage = IMAGES[Math.floor(Math.random() * IMAGES.length)];
+
+/**
+ * @param {{ navigation: { navigate: (screen: string) => void } }} props
+ */
 const WelcomePage = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -17,8 +23,8 @@ const WelcomePage = ({ navigation }) => {
       <View style={styles.container}>
         <View style={styles.heroWrap}>
           <Image
-            source={require('../../../assets/foodCovers/burger.jpg')}
-            resizeMode="cover"
+            source={chosenImage}
+            resizeMode="stretch"
             style={styles.heroImage}
           />
         </View>

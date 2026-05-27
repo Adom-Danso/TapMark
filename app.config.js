@@ -10,15 +10,16 @@ module.exports = {
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#801718"
     },
     "ios": {
+      "bundleIdentifier": "com.lewishall.TapMark",
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#801718"
       },
       "package": "com.lewishall.TapMark"
     },
@@ -45,6 +46,18 @@ module.exports = {
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#801718",
+          "image": "./assets/splash-icon.png",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#801718"
+          },
+          "resizeMode": "contain",
         }
       ]
     ],

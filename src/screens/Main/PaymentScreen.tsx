@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from '../auth/authTheme';
 import { usePaymentMethods } from '../../context/PaymentMethodsContext';
 import OtpModal from '../../components/OtpModal';
@@ -24,22 +23,37 @@ import { useCart } from '@/context/CartContext';
 import { submitPaystackOtp } from '@/functions/payments/submit-otp';
 import { showToast } from '@/utils/notifications';
 import { checkPaymentStatus } from '@/functions/payments/check-payment-status';
+import { deleteOneTempOrder } from '@/functions/orders/delete-one-temp-order';
+import { updateOneCart } from '@/functions/cart/update-one-cart';
+import { clearActiveCartId } from '@/utils/cart';
+import { useLocation } from '@/context/LocationContext';
 
 const METHOD_TYPE_LABELS = {
   'mobile-money': 'Mobile Money',
   bank: 'Bank',
+  'tapmark-wallet': 'Tapmark Wallet',
 };
 
 const METHOD_ICONS = {
   'mobile-money': 'phone-portrait-outline',
   bank: 'business-outline',
+  'tapmark-wallet': 'wallet-outline',
+};
+
+const TAPMARK_WALLET_METHOD: any = {
+  id: 'tapmark-wallet',
+  type: 'tapmark-wallet',
+  label: 'Tapmark Wallet',
+  displayLabel: 'Tapmark Wallet',
+  accountName: 'Tapmark Wallet',
+  isDefault: true,
 };
 
 /**
  * SelectableMethodCard
  * Reusable card for selecting a payment method
  */
-const SelectableMethodCard = ({ method, isSelected, onSelect }) => {
+const SelectableMethodCard = ({ method, isSelected, onSelect }: { method: any; isSelected: any; onSelect: any }) => {
   const scale = useRef(new Animated.Value(1)).current;
 
   const pressIn = () => {
@@ -60,7 +74,7 @@ const SelectableMethodCard = ({ method, isSelected, onSelect }) => {
     }).start();
   };
 
-  const icon = METHOD_ICONS[method.type] || 'wallet-outline';
+  const icon: any = METHOD_ICONS[method.type as keyof typeof METHOD_ICONS] || 'wallet-outline';
   const displayLabel = method.displayLabel || method.label || method.accountName || 'Unknown';
 
   return (
@@ -74,7 +88,7 @@ const SelectableMethodCard = ({ method, isSelected, onSelect }) => {
       >
         <View style={styles.methodIconWrap}>
           <Ionicons
-            name={icon}
+            name={icon as any}
             size={18}
             color={isSelected ? AUTH_COLORS.primary : AUTH_COLORS.muted}
           />
@@ -108,17 +122,19 @@ type PaymentScreenParams = {
  * Route Params:
  *  - paymentType: 'mobile-money' or 'bank' (from CartScreen)
  */
-const PaymentScreen = ({ route, navigation }) => {
+const PaymentScreen = ({ route, navigation }: any) => {
   const insets = useSafeAreaInsets();
   const { paymentMethods } = usePaymentMethods();
+  const { addLocation, currentLocation } = useLocation()
   const { profileData } = useProfile()
-  const { activeCartId } = useCart()
+  const { activeCartId, refreshCart } = useCart()
 
   // Get payment type from route params (passed from CartScreen)
   const { paymentType, tempOrderId, amountToPay } = route.params || {};
+  const paymentTypeLabel = METHOD_TYPE_LABELS[paymentType as keyof typeof METHOD_TYPE_LABELS] || 'payment';
 
   // State management
-  const [selectedMethod, setSelectedMethod] = useState<PaymentMethodType | null>(null);
+  const [selectedMethod, setSelectedMethod] = useState<any>(null);
   const [otpModalVisible, setOtpModalVisible] = useState(false);
   const [otpVerified, setOtpVerified] = useState(false);
   const [confirmationModalVisible, setConfirmationModalVisible] = useState(false);
@@ -126,6 +142,68 @@ const PaymentScreen = ({ route, navigation }) => {
   const [phoneNumber, setPhoneNumber] = useState('your phone');
   const [paymentReference, setPaymentReference] = useState<string | null>(null)
   const [paymentId, setPaymentId] = useState<string | null>(null)
+  const [hasTappedPay, setHasTappedPay] = useState(false)
+  const isExitingRef = useRef(false)
+  const isResettingRef = useRef(false)
+
+  const resetToCartIndex = () => {
+    isResettingRef.current = true;
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'CartIndex' }],
+    });
+  };
+
+  const handleClosePress = () => {
+    if (!tempOrderId || deleteOneTempOrderMutation.isPending || isExitingRef.current) {
+      return;
+    }
+
+    isExitingRef.current = true;
+    deleteOneTempOrderMutation.mutate(tempOrderId);
+  };
+
+
+  const updateCartMutation = useMutation({
+    mutationKey: ["updateCart"],
+    mutationFn: async (payload: any) => {
+      setConfirmationModalVisible(true);
+      const response = await updateOneCart(payload, activeCartId as string)
+      return response
+    },
+    onSuccess: (data) => {
+      clearActiveCartId();
+      addLocation(currentLocation!);
+      refreshCart()
+      setTimeout(() => {
+        setConfirmationModalVisible(false);
+        if (otpVerified) {
+          setOtpVerified(false);
+        }
+        resetToCartIndex();
+      }, 500);
+    },
+    onError: (error) => {
+
+    },
+  })
+
+  const deleteOneTempOrderMutation = useMutation({
+    mutationKey: ["deleteOneTempOrder"],
+    mutationFn: async (tempOrderId: string) => {
+      const response = await deleteOneTempOrder(tempOrderId)
+      return response
+    },
+    onSuccess: (data) => {
+      console.log("Temp order deleted successfully", data);
+      resetToCartIndex();
+    },
+    onError: (error) => {
+      isExitingRef.current = false;
+      console.log(error)
+      showToast("error", error.message || "Failed to delete temp order")
+    }
+  })
 
   const addOnePaymentMutation = useMutation({
     mutationKey: ["addOnePaymentMutation"],
@@ -140,8 +218,12 @@ const PaymentScreen = ({ route, navigation }) => {
       const requestPayload = { ...payload }
       if (selectedMethod.type == 'mobile-money') {
         requestPayload.mobileMoney = toPaystackMobileMoneyFragment(selectedMethod)
-      } else {
-        requestPayload.bank = toPaystackBankFragment(selectedMethod)
+      } else if (selectedMethod.type == 'bank') {
+        requestPayload.bank = toPaystackBankFragment(selectedMethod as PaymentMethodType)
+      } else if (selectedMethod.type === 'tapmark-wallet') {
+        // No additional data needed for tapmark wallet
+        requestPayload.mobileMoney = undefined;
+        requestPayload.bank = undefined;
       }
 
       const response = await addOnePayment(requestPayload)
@@ -150,13 +232,20 @@ const PaymentScreen = ({ route, navigation }) => {
       return response
     },
     onSuccess: (data) => {
-      if (data.nextStep == "otp") {
+      if (data.nextStep == "send_otp") {
         setOtpModalVisible(true);
       } else {
         setOtpVerified(true);
       }
+
+      if (paymentType === 'tapmark-wallet') {
+        setConfirmationType('pending');
+        updateCartMutation.mutate({ isOrderCompleted: true })
+      }
     },
     onError: (error) => {
+      console.log(error)
+      setHasTappedPay(false);
       showToast("error", error.message || "Failed to initiate Payment")
     }
   })
@@ -182,46 +271,81 @@ const PaymentScreen = ({ route, navigation }) => {
     }
   })
 
+
   const iHavePaidMutation = useMutation({
     mutationKey: ["iHavePaidMutation"],
     mutationFn: async () => {
       if (!paymentReference || !paymentId) throw Error("Payment reference or ID not set");
+      setConfirmationType("pending");
+      setConfirmationModalVisible(true);
       const response = await checkPaymentStatus({ reference: paymentReference, paymentId: paymentId })
       return response.data
     },
     onSuccess: (data) => {
       if (data.paymentStatus === "completed") {
         setConfirmationType("success");
+        updateCartMutation.mutate({ isOrderCompleted: data.paymentStatus === "completed" })
       } else if (data.paymentStatus === "pending") {
-        setConfirmationType("pending");
+        setTimeout(() => {
+          setConfirmationModalVisible(false);
+        }, 1000);
       } else {
         setConfirmationType("failure");
+        setTimeout(() => {
+          setConfirmationModalVisible(false);
+          if (otpVerified) {
+            setOtpVerified(false);
+          }
+          resetToCartIndex();
+        }, 2000);
+
       }
-      setConfirmationModalVisible(true);
-      setTimeout(() => {
-        setConfirmationModalVisible(false);
-        setOtpVerified(false);
-        navigation.navigate('Orders');
-      }, 2500);
+
     },
     onError: (error) => {
       showToast("error", error.message || "Failed to check payment status")
     }
   })
 
+  const showCloseButton = !hasTappedPay;
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (event: any) => {
+      if (isResettingRef.current) {
+        return;
+      }
+
+      if (!tempOrderId) {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (!isExitingRef.current && !deleteOneTempOrderMutation.isPending) {
+        handleClosePress();
+      }
+    });
+
+    return unsubscribe;
+  }, [deleteOneTempOrderMutation.isPending, navigation, tempOrderId]);
+
   // Filter methods by payment type
   const filteredMethods = useMemo(
     () => paymentMethods.filter((m) => m.type === paymentType),
     [paymentMethods, paymentType]
   );
+  const visibleMethods = useMemo<any[]>(
+    () => (paymentType === 'tapmark-wallet' ? [TAPMARK_WALLET_METHOD] : filteredMethods),
+    [filteredMethods, paymentType]
+  );
 
   // Auto-select first method if available
   useEffect(() => {
-    if (filteredMethods.length > 0 && !selectedMethod) {
-      const defaultMethod = filteredMethods.find((m) => m.isDefault);
-      setSelectedMethod(defaultMethod || filteredMethods[0]);
+    if (visibleMethods.length > 0 && !selectedMethod) {
+      const defaultMethod = visibleMethods.find((m) => m.isDefault);
+      setSelectedMethod(defaultMethod || visibleMethods[0]);
     }
-  }, [filteredMethods, selectedMethod]);
+  }, [selectedMethod, visibleMethods]);
 
   // Handle OTP verification
   // const handleOtpVerify = (code, onComplete) => {
@@ -256,12 +380,7 @@ const PaymentScreen = ({ route, navigation }) => {
   //   }, 2500);
   // };
 
-  // Handle confirmation modal success callback
-  const handleConfirmationSuccess = () => {
-    setConfirmationModalVisible(false);
-    // Navigate to Orders or confirmation screen
-    navigation.navigate('Orders');
-  };
+
 
   // Handle confirmation modal retry (failure)
   const handleConfirmationRetry = () => {
@@ -277,8 +396,25 @@ const PaymentScreen = ({ route, navigation }) => {
 
   const showPaidLoading = confirmationModalVisible && confirmationType === 'pending';
 
+  const handleOpenPaymentMethods = () => {
+    const parentNav = navigation.getParent();
+
+    if (parentNav) {
+      parentNav.navigate('Profile', {
+        screen: 'PaymentMethods',
+        params: { origin: 'payment' },
+      });
+      return;
+    }
+
+    navigation.navigate('Profile', {
+      screen: 'PaymentMethods',
+      params: { origin: 'payment' },
+    });
+  };
+
   // If no methods available, show empty state
-  if (filteredMethods.length === 0) {
+  if (visibleMethods.length === 0) {
     return (
       <View style={styles.container}>
         <ScrollView
@@ -291,15 +427,15 @@ const PaymentScreen = ({ route, navigation }) => {
             <Ionicons name="wallet-outline" size={32} color={AUTH_COLORS.primary} />
             <Text style={styles.emptyTitle}>No payment methods</Text>
             <Text style={styles.emptyText}>
-              Add a {METHOD_TYPE_LABELS[paymentType] || 'payment'} method in your profile.
+              Add a {paymentTypeLabel} method to continue your payment.
             </Text>
             <TouchableOpacity
               style={styles.addButton}
-              onPress={() => navigation.getParent().navigate('Profile')}
+              onPress={handleOpenPaymentMethods}
               activeOpacity={0.9}
             >
               <Ionicons name="add" size={18} color="#fff" />
-              <Text style={styles.addButtonText}>Add {METHOD_TYPE_LABELS[paymentType]}</Text>
+              <Text style={styles.addButtonText}>Add {paymentTypeLabel}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -316,12 +452,12 @@ const PaymentScreen = ({ route, navigation }) => {
         <View style={styles.headerWrap}>
           <Text style={styles.title}>Select Payment Method</Text>
           <Text style={styles.subtitle}>
-            Choose your {METHOD_TYPE_LABELS[paymentType]} method
+            Choose your {paymentTypeLabel} method
           </Text>
         </View>
 
         <View style={styles.methodsWrap}>
-          {filteredMethods.map((method) => (
+          {visibleMethods.map((method) => (
             <SelectableMethodCard
               key={method.id}
               method={method}
@@ -342,19 +478,40 @@ const PaymentScreen = ({ route, navigation }) => {
 
       {/* Action buttons (fixed at bottom) */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+        {showCloseButton && (
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={handleClosePress}
+            activeOpacity={0.9}
+            disabled={deleteOneTempOrderMutation.isPending}
+          >
+            {deleteOneTempOrderMutation.isPending ? (
+              <ActivityIndicator size="small" color={AUTH_COLORS.primary} />
+            ) : (
+              <Ionicons name="close" size={16} color={AUTH_COLORS.primary} />
+            )}
+            <Text style={styles.closeButtonText}>
+              {deleteOneTempOrderMutation.isPending ? 'Closing...' : 'Close'}
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {!otpVerified ? (
           <TouchableOpacity
             style={[
               styles.payButton,
               !selectedMethod && styles.payButtonDisabled,
             ]}
-            onPress={() => addOnePaymentMutation.mutate({
-              userId: profileData.id,
-              paymentMethod: paymentType,
-              amount: amountToPay,
-              tempOrderId: tempOrderId,
-              cartId: activeCartId as string,
-            })}
+            onPress={() => {
+              setHasTappedPay(true);
+              addOnePaymentMutation.mutate({
+                userId: profileData.id,
+                paymentMethod: paymentType,
+                amount: amountToPay,
+                tempOrderId: tempOrderId,
+                cartId: activeCartId as string,
+              });
+            }}
             activeOpacity={0.9}
             disabled={!selectedMethod}
           >
@@ -368,10 +525,11 @@ const PaymentScreen = ({ route, navigation }) => {
             </Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity
+          (paymentType !== 'tapmark-wallet' && <TouchableOpacity
             style={styles.payButton}
-            onPress={()=> iHavePaidMutation.mutate()}
+            onPress={() => iHavePaidMutation.mutate()}
             activeOpacity={0.9}
+            disabled={iHavePaidMutation.isPending || showPaidLoading || otpModalVisible}
           >
             {showPaidLoading ? (
               <ActivityIndicator size="small" color="#fff" />
@@ -381,7 +539,7 @@ const PaymentScreen = ({ route, navigation }) => {
             <Text style={styles.payButtonText}>
               {showPaidLoading ? 'Checking...' : 'I have paid'}
             </Text>
-          </TouchableOpacity>
+          </TouchableOpacity>)
         )}
       </View>
 
@@ -391,13 +549,14 @@ const PaymentScreen = ({ route, navigation }) => {
         onVerify={(code: string, onComplete: () => void) => submitPaystackOtpMutation.mutate({ otp: code, onComplete: onComplete })}
         onClose={handleOtpModalClose}
         phoneNumber={phoneNumber}
+        dismissible={false}
       />
 
       {/* Confirmation Modal (success / failure / pending) */}
       <ConfirmationModal
         visible={confirmationModalVisible}
         type={confirmationType}
-        onSuccess={handleConfirmationSuccess}
+        onSuccess={() => 1}
         onRetry={handleConfirmationRetry}
         successMessage="Payment confirmed!"
         failureMessage="Payment verification failed"
@@ -547,6 +706,24 @@ const styles = StyleSheet.create({
     borderTopColor: AUTH_COLORS.line,
     paddingHorizontal: AUTH_SPACING.screenX,
     paddingTop: 12,
+  },
+  closeButton: {
+    marginBottom: 10,
+    borderRadius: AUTH_RADII.pill,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FFF8F6',
+    borderWidth: 1,
+    borderColor: '#EACCC8',
+  },
+  closeButtonText: {
+    color: AUTH_COLORS.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   payButton: {
     backgroundColor: AUTH_COLORS.primary,

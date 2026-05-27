@@ -164,7 +164,7 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
   };
 
   const handleLocationPress = () => {
-    navigation.navigate('MapPicker');
+    navigation.navigate('MapPicker', { origin: 'home' });
   };
 
   return (

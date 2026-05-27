@@ -95,11 +95,11 @@ const StoreDetailsScreen = ({ route, navigation }: StoreDetailsScreenProps) => {
           {item.name}
         </Text>
         <View style={styles.itemMetaRow}>
-          <Text style={styles.itemPrice}>{item.price}</Text>
-          <View style={styles.itemRatingRow}>
+          <Text style={styles.itemPrice}>GHS {item.price.toFixed(2)}</Text>
+          {/* <View style={styles.itemRatingRow}>
             <Ionicons name="star" size={12} color="#F5A623" />
             <Text style={styles.itemRatingText}>{item.averageRating?.toFixed(1)}</Text>
-          </View>
+          </View> */}
         </View>
       </View>
     </Pressable>
@@ -133,10 +133,10 @@ const StoreDetailsScreen = ({ route, navigation }: StoreDetailsScreenProps) => {
               <Ionicons name="bicycle-outline" size={14} color={AUTH_COLORS.primaryDark} />
               <Text style={styles.statLabel}>GHS {estimatedDeliveryFee.toFixed(2)}</Text>
             </View>
-            <View style={styles.statPill}>
+            {/* <View style={styles.statPill}>
               <Ionicons name="star" size={14} color="#F5A623" />
               <Text style={styles.statLabel}>{averageRating?.toFixed(1)}</Text>
-            </View>
+            </View> */}
             <View
               style={[
                 styles.statPill,

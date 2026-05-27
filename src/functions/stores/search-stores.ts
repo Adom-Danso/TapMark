@@ -29,7 +29,7 @@ export async function searchStores(
                 skip: skip,
                 sort_by: sortBy,
                 sort_order: sortOrder,
-                store_ids: storeIds,
+                store_ids: storeIds?.join(','),
                 shuffle: shuffle,
                 center_lat: centerLat,
                 center_lng: centerLng,

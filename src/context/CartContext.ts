@@ -1,20 +1,37 @@
 import { addOneCartItem } from '@/functions/cart-items/add-one-cart-item';
 import { deleteOneCartItem } from '@/functions/cart-items/delete-one-cart-item';
 import { getOneCartItemById } from '@/functions/cart-items/get-one-cart-item-by-id';
+import { updateOneCartItem } from '@/functions/cart-items/update-cart-item-by-id';
 import { addOneCart } from '@/functions/cart/add-one-cart';
 import { getOneCartById } from '@/functions/cart/get-one-cart-by-id';
 import { CartItem, CartItemAddition } from '@/schemas/cart-items';
-import { StoreItemExtra } from '@/schemas/store-item-extras';
 import { getActiveCartId, saveActiveCartId } from '@/utils/cart';
 import { showToast } from '@/utils/notifications';
 import { generateImageUrl } from '@/utils/shared';
-import { clearTokens } from '@/utils/tokens';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import React, { createContext, useContext, useMemo, useState } from 'react';
-import { set } from 'zod';
+
+
+
+export type CartLineType = {
+  cartLineId: string,
+  qty: number,
+  itemId: string,
+  title: string,
+  lineUnitPrice: number,
+  lineTotal: number,
+  note: string,
+  isSoldPerUnit: boolean,
+  imageUri: string,
+  storeId: string,
+  selectedExtras: CartItemAddition[],
+  basePrice: number,
+  itemAmount: number,
+  createdAt: string
+}
 
 type CartContextType = {
-  cartLines: any[];
+  cartLines: CartLineType[];
   subtotal: number;
   activeCartId: string | null;
   totalItems: number;
@@ -23,8 +40,10 @@ type CartContextType = {
   updateCartLine: (cartLineId: string, patch?: any) => void;
   updateCartLineExtras: (cartLineId: string, newSelectedExtras?: any[], newNote?: string) => void;
   removeCartLine: (cartLineId: string) => void;
+  updateCartLineItemAmount: (cartLineId: string, amount: number) => void;
   clearCart: () => void;
   parseMoney: (value: any) => number;
+  refreshCart: ()=>void;
   isAdding: boolean;
   isRemoving: boolean;
 };
@@ -61,9 +80,9 @@ const calculateExtrasTotal = (selectedExtras: CartItemAddition[]) =>
     0
   );
 
-const buildCartLine = (payload: CartItem) => {
+const buildCartLine = (payload: CartItem): CartLineType => {
   const qty = clampInt(payload.quantity, 1);
-  const basePrice = parseMoney(payload.storeItem.isSoldPerUnit ? payload.itemAmount : payload.storeItem.price * payload.quantity);
+  const basePrice = parseMoney(!payload.storeItem.isSoldPerUnit ? payload.itemAmount : payload.storeItem.price * payload.quantity);
   const extrasTotal = calculateExtrasTotal(payload.additions || []);
   const lineUnitPrice = basePrice + extrasTotal;
 
@@ -76,9 +95,11 @@ const buildCartLine = (payload: CartItem) => {
     basePrice,
     selectedExtras: payload.additions || [],
     note: normalizeNote(payload.note as string),
+    isSoldPerUnit: payload.storeItem.isSoldPerUnit,
     qty,
     lineUnitPrice,
-    lineTotal: lineUnitPrice * qty,
+    itemAmount: payload.itemAmount,
+    lineTotal: lineUnitPrice,
     createdAt: payload.createdAt,
   };
 };
@@ -93,12 +114,12 @@ const recalcLine = (line: any) => {
 };
 
 export const CartProvider = ({ children }: { children: React.ReactNode }) => {
-  const [cartLines, setCartLines] = useState<any[]>([]);
+  const [cartLines, setCartLines] = useState<CartLineType[]>([]);
   const [activeCartId, setActiveCartId] = useState<string | null>(null);
 
   async function fetchActiveCart() {
     const _activeCartId = await getActiveCartId();
-    
+
     if (!_activeCartId || _activeCartId === 'undefined' || _activeCartId === 'null') {
       const newCartResponse = await addOneCart();
       await saveActiveCartId(newCartResponse.data.id);
@@ -182,24 +203,65 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
     }
   });
 
+  // Aggregate all cart operation loading states
+  const updateCartItemMutation = useMutation({
+    mutationKey: ['updateCartItem'],
+    mutationFn: async (payload: { id: string, updates: Partial<CartItem> }) => {
+      const response = await updateOneCartItem(payload.id, payload.updates);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      try {
+        fetchCartQuery.refetch()
+      } catch (err) {
+        // fallback: show success toast anyway
+      }
+      showToast('success', 'Item updated', 'Your cart item has been updated successfully.');
+    },
+    onError: (error) => {
+      showToast("error", "Update Failed", error.message || "An error occurred while updating your cart item. Please try again.");
+    }
+  })
+
+  const refreshCart = () => {
+    fetchCartQuery.refetch()
+  }
+
   const isAdding = (addCartItemMutation as any).isLoading || false;
   const isRemoving = (removeCartItemMutation as any).isLoading || false;
 
   const addCartLine = (payload: any) => {
     if (!activeCartId) {
-      showToast('error', 'Cart not ready. Please try again.');
-      return;
+      refreshCart();
     }
 
-    addCartItemMutation.mutate(payload);
+    for (let i = 0; i < (payload.packageQty || 1); i++) {
+      addCartItemMutation.mutate(payload);
+    }
   };
 
   const updateCartLineQty = (cartLineId: string, delta: number) => {
-    setCartLines((prev) =>
-      prev.map((line) =>
-        line.cartLineId === cartLineId ? recalcLine({ ...line, qty: line.qty + delta }) : line
-      )
-    );
+    const lineToUpdate = cartLines.find(value => value.cartLineId == cartLineId)
+    if (lineToUpdate) {
+      updateCartItemMutation.mutate({ id: cartLineId, updates: { quantity: lineToUpdate.qty + delta } })
+    }
+    // setCartLines((prev) =>
+    //   prev.map((line) =>
+    //     line.cartLineId === cartLineId ? recalcLine({ ...line, qty: line.qty + delta }) : line
+    //   )
+    // );
+  };
+  const updateCartLineItemAmount = (cartLineId: string, amount: number) => {
+    const lineToUpdate = cartLines.find(value => value.cartLineId == cartLineId)
+    if (lineToUpdate) {
+      updateCartItemMutation.mutate({ id: cartLineId, updates: { itemAmount: amount } })
+    }
+
+    // setCartLines((prev) =>
+    //   prev.map((line) =>
+    //     line.cartLineId === cartLineId ? recalcLine({ ...line, qty: line.qty + delta }) : line
+    //   )
+    // );
   };
 
   const removeCartLine = (cartLineId: string) => {
@@ -258,6 +320,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
       activeCartId,
       addCartLine,
       updateCartLineQty,
+      updateCartLineItemAmount,
       updateCartLine,
       updateCartLineExtras,
       removeCartLine,
@@ -265,6 +328,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
       parseMoney,
       isAdding,
       isRemoving,
+      refreshCart,
     }),
     [cartLines, subtotal, totalItems, isAdding, isRemoving]
   );

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Animated, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from 'react-native-maps';
@@ -7,14 +7,22 @@ import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from '../auth/authTheme';
 import { useLocation } from '../../context/LocationContext';
 import { LocationSchema } from '@/schemas/location';
 
+type MapPickerOrigin = 'home' | 'cart';
+
+type MapPickerRouteParams = {
+  origin?: MapPickerOrigin;
+};
+
 const MAP_DELTA = {
   latitudeDelta: 0.015,
   longitudeDelta: 0.015,
 };
 
-const MapPickerScreen = ({ navigation }: { navigation: any }) => {
+const MapPickerScreen = ({ navigation, route }: { navigation: any; route: { params?: MapPickerRouteParams } }) => {
   const insets = useSafeAreaInsets();
   const { currentLocation, recentLocations, updateLocation, setCurrentLocation, getLocationName } = useLocation();
+  const origin = route?.params?.origin ?? 'home';
+  const isExitingRef = useRef(false);
 
   const sheetTranslate = useRef(new Animated.Value(80)).current;
   const sheetOpacity = useRef(new Animated.Value(0)).current;
@@ -51,6 +59,38 @@ const MapPickerScreen = ({ navigation }: { navigation: any }) => {
     ]).start();
   }, [sheetOpacity, sheetTranslate]);
 
+  const handleExit = useCallback(() => {
+    if (isExitingRef.current) {
+      return;
+    }
+
+    isExitingRef.current = true;
+
+    if (origin === 'cart') {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'HomeIndex' }],
+      });
+      navigation.getParent()?.navigate('Cart', { screen: 'CartIndex' });
+      return;
+    }
+
+    navigation.goBack();
+  }, [navigation, origin]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (event: any) => {
+      if (isExitingRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+      handleExit();
+    });
+
+    return unsubscribe;
+  }, [handleExit, navigation]);
+
   const handleDragEnd = (event: { nativeEvent: { coordinate: { latitude: number; longitude: number } } }) => {
     const { latitude, longitude } = event.nativeEvent.coordinate;
     setPinLocation({ latitude, longitude });
@@ -73,7 +113,7 @@ const MapPickerScreen = ({ navigation }: { navigation: any }) => {
       id: selectedLocation.id || `loc-${Date.now()}`,
     };
     updateLocation(locationToSave);
-    navigation.goBack();
+    handleExit();
   };
 
   const renderRecentItem = ({ item }: { item: LocationSchema }) => {
@@ -120,7 +160,7 @@ const MapPickerScreen = ({ navigation }: { navigation: any }) => {
       </MapView>
 
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.backButton} onPress={handleExit}>
           <Ionicons name="chevron-back" size={22} color={AUTH_COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Choose location</Text>

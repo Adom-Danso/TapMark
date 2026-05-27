@@ -29,6 +29,15 @@ const FavoritesScreen = ({ navigation }: { navigation: any }) => {
         null,
         null,
         favoriteStores,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+
       )
       return response.data;
     } catch (error) {

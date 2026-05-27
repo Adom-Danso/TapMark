@@ -13,7 +13,17 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from '../screens/auth/authTheme';
 
-const OTP_LENGTH = 4;
+const OTP_LENGTH = 6;
+
+/**
+ * @typedef {Object} OtpModalProps
+ * @property {boolean} visible
+ * @property {(code: string, onComplete: () => void) => void} onVerify
+ * @property {() => void} [onClose]
+ * @property {string} [phoneNumber]
+ * @property {boolean} [isVerifying]
+ * @property {boolean} [dismissible]
+ */
 
 /**
  * OtpModal component
@@ -21,17 +31,22 @@ const OTP_LENGTH = 4;
  * Calls onVerify(code) when user submits valid OTP
  * Calls onClose() when user closes the modal
  */
+/**
+ * @param {OtpModalProps} props
+ */
 const OtpModal = ({
   visible,
   onVerify,
   onClose,
   phoneNumber = 'your phone',
   isVerifying = false,
+  dismissible = true,
 }) => {
   const [code, setCode] = useState(Array(OTP_LENGTH).fill(''));
   const [isVerifyingLocal, setIsVerifyingLocal] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [resendIn, setResendIn] = useState(60);
+  /** @type {React.MutableRefObject<Array<import('react-native').TextInput | null>>} */
   const inputs = useRef([]);
 
   useEffect(() => {
@@ -53,10 +68,12 @@ const OtpModal = ({
 
   const codeValue = useMemo(() => code.join(''), [code]);
 
+  /** @param {number} index */
   const focusInput = (index) => {
     inputs.current[index]?.focus();
   };
 
+  /** @param {string} value @param {number} index */
   const handleChange = (value, index) => {
     const sanitized = value.replace(/[^0-9]/g, '');
     if (sanitized.length === 0) {
@@ -85,6 +102,7 @@ const OtpModal = ({
     focusInput(nextIndex);
   };
 
+  /** @param {{ nativeEvent: { key?: string } }} event @param {number} index */
   const handleKeyPress = (event, index) => {
     if (event.nativeEvent.key !== 'Backspace') return;
     if (code[index]) return;
@@ -126,21 +144,29 @@ const OtpModal = ({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={dismissible ? handleClose : () => {}}
+    >
       <KeyboardAvoidingView
         style={styles.safeArea}
         behavior={Platform.select({ ios: 'padding', android: undefined })}
       >
         <View style={styles.backdrop}>
           <View style={styles.modalContent}>
-            {/* Close button */}
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={handleClose}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="close" size={24} color={AUTH_COLORS.text} />
-            </TouchableOpacity>
+            {dismissible ? (
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={handleClose}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={24} color={AUTH_COLORS.text} />
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.closeButtonPlaceholder} />
+            )}
 
             {/* Title and subtitle */}
             <Text style={styles.title}>Enter OTP</Text>
@@ -156,7 +182,7 @@ const OtpModal = ({
                   ref={(ref) => {
                     inputs.current[index] = ref;
                   }}
-                  style={[styles.otpInput, { width: '22%' }]}
+                  style={styles.otpInput}
                   keyboardType="number-pad"
                   maxLength={1}
                   value={digit}
@@ -238,6 +264,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     padding: 8,
   },
+  closeButtonPlaceholder: {
+    height: 40,
+    marginBottom: 8,
+  },
   title: {
     fontSize: 18,
     fontWeight: '700',
@@ -251,11 +281,11 @@ const styles = StyleSheet.create({
   },
   otpRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 10,
     marginBottom: 24,
   },
   otpInput: {
-    width: 44,
+    flex: 1,
     height: 52,
     borderRadius: 12,
     borderWidth: 1,

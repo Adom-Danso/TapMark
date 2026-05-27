@@ -50,7 +50,10 @@ export const ProfileProvider = ({ children }: { children: React.ReactNode }) => 
     const fetchUserWalletQuery = useQuery({
         queryKey: ["fetchUserWallet", profileData],
         queryFn: fetchUserWallet,
-        enabled: profileData != null
+        enabled: profileData != null,
+        refetchInterval: 1000 * 60 * 5, // Refetch every 5 minutes
+        refetchOnWindowFocus: true, // Refetch when the window regains focus
+        refetchOnReconnect: true, // Refetch when the device reconnects to the internet
     })
     React.useEffect(() => {
         if (fetchUserWalletQuery.data && fetchUserWalletQuery.status == "success") {

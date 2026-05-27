@@ -248,7 +248,7 @@ const ProfileScreen = ({ navigation, route }: { navigation: any; route: any }) =
             <View style={styles.chip}>
               <Text style={styles.chipLabel}>Location</Text>
               <Text style={styles.chipValue} numberOfLines={1}>
-                {currentLocation.name}
+                {currentLocation?.name}
               </Text>
             </View>
           </View>
@@ -274,7 +274,7 @@ const ProfileScreen = ({ navigation, route }: { navigation: any; route: any }) =
             icon="card-outline"
             title="Payment methods"
             subtitle={`${paymentMethods.length} method${paymentMethods.length === 1 ? '' : 's'} added`}
-            onPress={() => navigation.navigate('PaymentMethods')}
+            onPress={() => navigation.navigate('PaymentMethods', { origin: 'profile' })}
           />
         </Animated.View>
 

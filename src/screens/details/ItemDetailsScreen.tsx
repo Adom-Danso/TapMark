@@ -12,7 +12,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from '../auth/authTheme';
-import { normalizeItemForDetails } from '../../functions/storeApi';
 import { useCart } from '../../context/CartContext';
 import { showToast } from '@/utils/notifications';
 import { getOneStoreItemById } from '@/functions/store-items/get-one-store-item-by-id';
@@ -271,8 +270,8 @@ const ItemDetailsScreen = ({ route, navigation }: StoreItemDetailScreenProps) =>
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
       >
-          {resolvedImageUri ? (
-            <Image source={{ uri: resolvedImageUri }} style={styles.image} resizeMode="cover" />
+        {resolvedImageUri ? (
+          <Image source={{ uri: resolvedImageUri }} style={styles.image} resizeMode="cover" />
         ) : null}
 
         <View style={styles.card}>

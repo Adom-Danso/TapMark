@@ -189,7 +189,6 @@ const OrdersScreen = () => {
             keyExtractor={(item) => item.id}
             contentContainerStyle={[
               styles.cardList,
-              orders.length === 0 ? styles.cardListEmpty : null,
               { paddingHorizontal: AUTH_SPACING.screenX, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 80 },
             ]}
             showsVerticalScrollIndicator={false}
@@ -321,9 +320,6 @@ const styles = StyleSheet.create({
   cardList: {
     gap: 12,
     flexGrow: 1,
-  },
-  cardListEmpty: {
-    justifyContent: 'center',
   },
   loadingWrap: {
     alignItems: 'center',

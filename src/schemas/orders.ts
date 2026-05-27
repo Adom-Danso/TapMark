@@ -31,7 +31,7 @@ export type Order = {
     deliveryFee: number;
     serviceFee: number;
     paymentTiming: "upfront" | "cash_on_delivery";
-    orderStatus: "pending" | "accepted" | "rejected" | "delivered" | "cancelled";
+    orderStatus: "processing" | "accepted" | "rejected" | "delivered" | "cancelled";
     orderNumber: string;
     isPickedUp: boolean;
     pickupDate: string;

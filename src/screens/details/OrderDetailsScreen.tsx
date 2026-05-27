@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View, TouchableOpacity, Modal, Linking, Image } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View, TouchableOpacity, Modal, Linking, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,19 +12,42 @@ import { useLocation } from '@/context/LocationContext';
 import { generateImageUrl } from '@/utils/shared';
 import { updateOneOrder } from '@/functions/orders/update-one-order-by-id';
 
-const ORDER_TIMELINE_STEPS = ['placed', 'processing', 'assigned', 'pick_up_completed', 'completed'] as const;
+const ORDER_TIMELINE_STEPS = ['placed', 'assigned', 'processing', 'pick_up_completed', 'completed'] as const;
 
 const STEP_META = {
   placed: { label: 'Placed', icon: 'checkmark-circle-outline' },
-  processing: { label: 'Preparing', icon: 'flame-outline' },
   assigned: { label: 'Assigned to courier', icon: 'bicycle' },
+  processing: { label: 'Preparing', icon: 'flame-outline' },
   pick_up_completed: { label: 'Picked up', icon: 'bicycle-outline' },
   completed: { label: 'Delivered', icon: 'flag-outline' },
   cancelled: { label: "Cancelled", icon: 'close' }
 } as const;
 
-const getTimelineStepIndex = (trackingStage?: string | null) => {
-  const normalizedStage = String(trackingStage || '').toLowerCase();
+const normaliseOrderStage = (order?: Order) => {
+  if (!order) return 'placed';
+
+  if (order.orderStatus === 'cancelled') return 'cancelled';
+
+  if (order.orderStatus === "processing" && !order.assignedCourierId) {
+    return 'placed';
+  }
+
+  if (order.orderStatus === 'processing' && order.assignedCourierId) {
+    return "preparing"
+  }
+
+  if (order.isPickedUp) {
+    return 'pick_up_completed';
+  }
+
+  if (order.isOrderCompleted) {
+    return 'completed';
+  }
+
+  return order.orderStatus;
+};
+
+const getTimelineStepIndex = (normalizedStage?: string | null) => {
 
   switch (normalizedStage) {
     case 'placed':
@@ -87,7 +110,7 @@ const TimelineStep = ({ stepKey, isActive, isComplete, isLast }: { stepKey: Time
   );
 };
 
-const OrderDetailsScreen = () => {
+const OrderDetailsScreen = ({navigation}: {navigation:any}) => {
   const route = useRoute<any>();
   const insets = useSafeAreaInsets();
   const orderId = route.params?.orderId;
@@ -95,7 +118,7 @@ const OrderDetailsScreen = () => {
 
   const [order, setOrder] = useState<Order | null>(null)
   const orderStatus = String((order as any)?.orderStatus || (order as any)?.status || '').toLowerCase();
-  const activeStepIndex = getTimelineStepIndex((order as any)?.trackingStage || orderStatus);
+  const activeStepIndex = getTimelineStepIndex(normaliseOrderStage(order as Order));
   const isCompleted = orderStatus === 'completed' || orderStatus === 'delivered';
   const [showCourierModal, setShowCourierModal] = useState(false);
 
@@ -126,11 +149,14 @@ const OrderDetailsScreen = () => {
     onSuccess: (data) => {
       showToast("success", "Order updated successfully")
       fetchOneOrderQuery.refetch()
+      navigation.goBack()
     },
     onError: (error: any) => {
       showToast("error", error.message || "Failed to update order")
     }
   })
+
+  const isOrderLoading = fetchOneOrderQuery.isPending && !order;
 
   return (
     <View style={styles.container}>
@@ -140,7 +166,13 @@ const OrderDetailsScreen = () => {
       >
         <Text style={styles.pageTitle}>Order details</Text>
 
-        {!order ? (
+        {isOrderLoading ? (
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="small" color={AUTH_COLORS.primary} />
+            <Text style={styles.loadingTitle}>Loading order details</Text>
+            <Text style={styles.subtitle}>Please wait while we fetch the latest order information.</Text>
+          </View>
+        ) : !order ? (
           <View style={styles.emptyCard}>
             <Ionicons name="alert-circle-outline" size={24} color={AUTH_COLORS.primary} />
             <Text style={styles.emptyTitle}>Order not found</Text>
@@ -155,7 +187,7 @@ const OrderDetailsScreen = () => {
                   <Text style={styles.subtitle}>{formatDateTime(order.createdAt)}</Text>
                 </View>
                 <View style={styles.statusPill}>
-                  <Text style={styles.statusText}>{order.orderStatus}</Text>
+                  <Text style={styles.statusText}>{STEP_META[normaliseOrderStage(order) as keyof typeof STEP_META]?.label || 'Unknown'}</Text>
                 </View>
               </View>
 
@@ -279,7 +311,7 @@ const OrderDetailsScreen = () => {
               </View>
             </View>
 
-            {!order.isPickedUp && (
+            {!order.isPickedUp && order.orderStatus !== 'cancelled' && (
               <TouchableOpacity
                 style={[styles.cancelButton, updateOneOrderMutation.isPending && styles.cancelButtonDisabled]}
                 onPress={() => updateOneOrderMutation.mutate({ orderStatus: 'cancelled' })}
@@ -313,6 +345,27 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: AUTH_COLORS.text,
+  },
+  loadingCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    minHeight: 220,
+    backgroundColor: AUTH_COLORS.card,
+    borderRadius: 18,
+    padding: AUTH_SPACING.block,
+    borderWidth: 1,
+    borderColor: AUTH_COLORS.line,
+  },
+  loadingTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: AUTH_COLORS.text,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: AUTH_COLORS.muted,
+    textAlign: 'center',
   },
   summaryCard: {
     backgroundColor: AUTH_COLORS.card,

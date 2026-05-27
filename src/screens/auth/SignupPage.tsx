@@ -83,7 +83,7 @@ const SignupPage = ({ navigation }: SignUpProps) => {
 			<StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
 			<View style={styles.heroWrap}>
 				<Image
-					source={require('../../../assets/foodCovers/burger.jpg')}
+					source={require('../../../assets/auth-logo.png')}
 					resizeMode="cover"
 					style={styles.heroImage}
 				/>

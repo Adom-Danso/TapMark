@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Alert,
   Animated,
@@ -19,9 +19,15 @@ import { getPaystackBanks } from '@/functions/payments/get-banks-list';
 import { showToast } from '@/utils/notifications';
 import { useQuery } from '@tanstack/react-query';
 
+type PaymentMethodsOrigin = 'profile' | 'payment';
+
+type PaymentMethodsRouteParams = {
+  origin?: PaymentMethodsOrigin;
+};
+
 const METHOD_TYPES = [
   { key: 'mobile-money', label: 'Mobile Money', icon: 'phone-portrait-outline' },
-  { key: 'bank', label: 'Bank', icon: 'business-outline' },
+  // { key: 'bank', label: 'Bank', icon: 'business-outline' },
 ];
 
 const MethodCard = ({ method, onSetDefault, onRemove }: { method: PaymentMethodType; onSetDefault: (methodId: string) => void; onRemove: (methodId: string) => void }) => {
@@ -87,15 +93,15 @@ const MethodCard = ({ method, onSetDefault, onRemove }: { method: PaymentMethodT
 };
 
 const PaymentMethodsScreen = (
-  { navigation, onSetDefault, onAddMethod, onRemoveMethod }: 
-  { navigation: any; onSetDefault: (methodId: string) => void; onAddMethod: (method: PaymentMethodType) => void; onRemoveMethod: (methodId: string) => void }) => {
+  { navigation, route, onSetDefault, onAddMethod, onRemoveMethod }: 
+  { navigation: any; route: { params?: PaymentMethodsRouteParams }; onSetDefault: (methodId: string) => void; onAddMethod: (method: PaymentMethodType) => void; onRemoveMethod: (methodId: string) => void }) => {
   const insets = useSafeAreaInsets();
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addStep, setAddStep] = useState('choose'); // 'choose' | 'form'
   const [newMethodType, setNewMethodType] = useState('mobile-money');
   const [mAccountName, setMAccountName] = useState('');
   const [mMobileNumber, setMMobileNumber] = useState('');
-  const [mProvider, setMProvider] = useState('MTN');
+  const [mProvider, setMProvider] = useState('mtn');
   const [bAccountName, setBAccountName] = useState('');
   const [bAccountNumber, setBAccountNumber] = useState('');
   const [bBankName, setBBankName] = useState('GCB Bank');
@@ -108,6 +114,8 @@ const PaymentMethodsScreen = (
   const undoTranslate = useRef(new Animated.Value(80)).current;
   const undoOpacity = useRef(new Animated.Value(0)).current;
   const undoTimeout = useRef(null);
+  const origin = route?.params?.origin ?? 'profile';
+  const isExitingRef = useRef(false);
 
   const {paymentMethods} = usePaymentMethods();
   const [bankList, setBankList] = useState<Bank[]>([]);
@@ -160,12 +168,44 @@ const PaymentMethodsScreen = (
     []
   );
 
+  const handleExit = useCallback(() => {
+    if (isExitingRef.current) {
+      return;
+    }
+
+    isExitingRef.current = true;
+
+    if (origin === 'payment') {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'ProfileHome' }],
+      });
+      navigation.getParent()?.navigate('Cart');
+      return;
+    }
+
+    navigation.goBack();
+  }, [navigation, origin]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (event: any) => {
+      if (isExitingRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+      handleExit();
+    });
+
+    return unsubscribe;
+  }, [handleExit, navigation]);
+
   const openAddModal = () => {
     setAddStep('choose');
     setNewMethodType('mobile-money');
     setMAccountName('');
     setMMobileNumber('');
-    setMProvider('MTN');
+    setMProvider('mtn');
     setBAccountName('');
     setBAccountNumber('');
     setBBankName('GCB Bank');
@@ -190,7 +230,9 @@ const PaymentMethodsScreen = (
 
       onAddMethod(method);
       setAddModalOpen(false);
-      navigation.navigate('ProfileHome', { notice: 'Mobile Money added' });
+      if (origin === 'profile') {
+        navigation.navigate('ProfileHome', { notice: 'Mobile Money added' });
+      }
       return;
     }
 
@@ -211,7 +253,9 @@ const PaymentMethodsScreen = (
 
       onAddMethod(method);
       setAddModalOpen(false);
-      navigation.navigate('ProfileHome', { notice: 'Bank added' });
+      if (origin === 'profile') {
+        navigation.navigate('ProfileHome', { notice: 'Bank added' });
+      }
       return;
     }
   };
