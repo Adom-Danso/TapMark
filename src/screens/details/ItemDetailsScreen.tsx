@@ -21,6 +21,7 @@ import { useQuery } from '@tanstack/react-query';
 import { StoreItem } from '@/schemas/store-items';
 import { StoreItemExtra } from '@/schemas/store-item-extras';
 import { generateImageUrl } from '@/utils/shared';
+import LoadingBackdrop from '@/components/LoadingBackdrop';
 
 const NOTE_MAX_LENGTH = 160;
 const parseMoney = (value: unknown): number => {
@@ -41,7 +42,7 @@ type StoreItemDetailScreenProps = NativeStackScreenProps<MainTabParamList, 'Item
 
 const ItemDetailsScreen = ({ route, navigation }: StoreItemDetailScreenProps) => {
   const insets = useSafeAreaInsets();
-  const { addCartLine, isAdding } = useCart() as any;
+  const { addCartLine, isLoading } = useCart() as any;
   const [storeItem, setStoreItem] = useState<StoreItem | null>(null);
   const { id, imageUri, price, description, name } = route.params || {};
 
@@ -531,11 +532,11 @@ const ItemDetailsScreen = ({ route, navigation }: StoreItemDetailScreenProps) =>
         <View style={[styles.ctaWrap, { paddingBottom: insets.bottom + 14 }]}>
           <TouchableOpacity
             activeOpacity={0.9}
-            style={[styles.addButton, (!canAdd || isAdding) ? styles.addButtonDisabled : null]}
-            disabled={!canAdd || isAdding}
+            style={[styles.addButton, (!canAdd || isLoading) ? styles.addButtonDisabled : null]}
+            disabled={!canAdd || isLoading}
             onPress={handleAddToCart}
           >
-            {isAdding ? (
+            {isLoading ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.addButtonText}>Add to cart • GHS {displayTotal}</Text>
@@ -543,6 +544,10 @@ const ItemDetailsScreen = ({ route, navigation }: StoreItemDetailScreenProps) =>
           </TouchableOpacity>
         </View>
       </ScrollView>
+      <LoadingBackdrop
+        visible={isLoading}
+        message={"Adding to cart..."}
+      />
     </View>
   );
 };

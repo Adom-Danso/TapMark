@@ -41,7 +41,7 @@ const CartScreen = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { currentLocation, isLoading: isLocationLoading } = useLocation();
-  const { cartLines, updateCartLineQty, removeCartLine, updateCartLine, isRemoving, activeCartId, updateCartLineItemAmount } = useCart();
+  const { cartLines, updateCartLineQty, removeCartLine, updateCartLine, isLoading, activeCartId, updateCartLineItemAmount } = useCart();
   const { profileData, userWallet } = useProfile();
 
   const [instructions, setInstructions] = useState('');
@@ -120,7 +120,7 @@ const CartScreen = () => {
   const isCartOperationLoading =
     isLocationLoading ||
     fetchCartInvoiceQuery.isPending ||
-    isRemoving ||
+    isLoading ||
     updateCartItemMutation.isPending;
 
   useEffect(() => {
@@ -555,9 +555,9 @@ const CartScreen = () => {
                       activeOpacity={0.8}
                       onPress={() => handleRemove(item.cartLineId)}
                       style={styles.removeButton}
-                      disabled={isRemoving}
+                      disabled={isLoading}
                     >
-                      {isRemoving ? (
+                      {isLoading ? (
                         <ActivityIndicator size="small" color={AUTH_COLORS.primary} />
                       ) : (
                         <Ionicons name="trash-outline" size={16} color={AUTH_COLORS.primary} />
@@ -670,6 +670,7 @@ const CartScreen = () => {
             deliveryFee: cartInvoice?.deliveryFee,
             serviceFee: cartInvoice?.serviceFee,
             deliveryInstructions: instructions,
+            paymentTiming: "upfront",
           } as RequestBody)}
         />
       </ScrollView>

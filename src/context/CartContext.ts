@@ -44,8 +44,7 @@ type CartContextType = {
   clearCart: () => void;
   parseMoney: (value: any) => number;
   refreshCart: ()=>void;
-  isAdding: boolean;
-  isRemoving: boolean;
+  isLoading: boolean;
 };
 
 const CartContext = createContext<CartContextType | null>(null);
@@ -227,8 +226,9 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
     fetchCartQuery.refetch()
   }
 
-  const isAdding = (addCartItemMutation as any).isLoading || false;
-  const isRemoving = (removeCartItemMutation as any).isLoading || false;
+  const isAdding = addCartItemMutation.isPending || false;
+  const isRemoving = removeCartItemMutation.isPending || false;
+  const isLoading = fetchCartQuery.isLoading || updateCartItemMutation.isPending || isAdding || isRemoving;
 
   const addCartLine = (payload: any) => {
     if (!activeCartId) {
@@ -326,11 +326,10 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
       removeCartLine,
       clearCart,
       parseMoney,
-      isAdding,
-      isRemoving,
+      isLoading,
       refreshCart,
     }),
-    [cartLines, subtotal, totalItems, isAdding, isRemoving]
+    [cartLines, subtotal, totalItems, isAdding, isLoading]
   );
 
   return React.createElement(CartContext.Provider, { value: value as any }, children);
