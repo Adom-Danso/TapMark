@@ -6,10 +6,13 @@ import {
 	TouchableOpacity,
 	View,
 	useWindowDimensions,
+	Platform,
 } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Notifications from "expo-notifications"
+import Constants from "expo-constants"
 
 import { AUTH_COLORS, AUTH_RADII } from './src/screens/auth/authTheme';
 import HomeStack from './src/screens/Main/HomeStack';
@@ -22,6 +25,8 @@ import { CartProvider } from './src/context/CartContext';
 import { ProfileProvider } from '@/context/ProfileContext';
 import { LocationProvider } from '@/context/LocationContext';
 import { SearchProvider } from '@/context/SearchContext';
+import { useMutation } from '@tanstack/react-query';
+import { addOneNotificationToken } from '@/functions/shared/send-notification-token';
 
 const Tab = createBottomTabNavigator();
 
@@ -191,7 +196,68 @@ const getIconName = (routeName, focused) => {
 	}
 };
 
+async function registerForPushNotificationsAsync() {
+	let token;
+
+	if (Platform.OS === 'android') {
+		await Notifications.setNotificationChannelAsync("pending-payment-channel", {
+			name: 'Payment Channel',
+			importance: Notifications.AndroidImportance.MAX,
+			vibrationPattern: [0, 250, 250, 250],
+			lightColor: '#FF231F7C',
+		});
+	}
+
+	const { status: existingStatus } = await Notifications.getPermissionsAsync();
+	let finalStatus = existingStatus;
+	if (existingStatus !== 'granted') {
+		const { status } = await Notifications.requestPermissionsAsync();
+		finalStatus = status;
+	}
+	if (finalStatus !== 'granted') {
+		alert('Failed to get push token for push notification!');
+		return;
+	}
+	try {
+		const projectId =
+			Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
+		if (!projectId) {
+			throw new Error('Project ID not found');
+		}
+		token = (
+			await Notifications.getExpoPushTokenAsync({
+				projectId,
+			})
+		).data;
+		console.log(token);
+	} catch (e) {
+		token = `${e}`;
+	}
+
+	return token;
+}
+
 const BottomTabs = () => {
+
+	const addNotificationTokenMutation = useMutation({
+		mutationKey: ["addNotificationToken"],
+		mutationFn: async (token: string) => {
+			const response = await addOneNotificationToken(token)
+			return response.data
+		},
+		retry: 4
+	})
+
+	React.useEffect(() => {
+		registerForPushNotificationsAsync().then((token) => {
+			// send token to server to save it
+			if (token === undefined || token === null) {
+
+			}
+			addNotificationTokenMutation.mutate(token as string)
+		});
+	}, [])
+
 	return (
 		<CartProvider>
 			<ProfileProvider>

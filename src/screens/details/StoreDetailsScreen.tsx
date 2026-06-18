@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AUTH_COLORS, AUTH_SPACING } from '../auth/authTheme';
-import { getStoreDetails, normalizeItemForDetails } from '../../functions/storeApi';
 import { useFavorites } from '../../context/FavoritesContext';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MainTabParamList } from '@/schemas/shared';
@@ -11,6 +10,8 @@ import { searchStoreItems } from '@/functions/store-items/search-store-items';
 import { StoreItem } from '@/schemas/store-items';
 import { useQuery } from '@tanstack/react-query';
 import { generateImageUrl } from '@/utils/shared';
+import { getOneStoreById } from '@/functions/stores/get-one-store-by-id';
+import { Store, WorkingHours } from '@/schemas/stores';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 type StoreDetailsScreenProps = NativeStackScreenProps<MainTabParamList, 'StoreDetails'>;
@@ -18,13 +19,67 @@ type StoreDetailsScreenProps = NativeStackScreenProps<MainTabParamList, 'StoreDe
 
 const StoreDetailsScreen = ({ route, navigation }: StoreDetailsScreenProps) => {
   const { id, name = 'Store Details', imageUri, rating = 0, isOpen = true, averageRating = 0, ratingCount = 0, estimatedDeliveryFee = 0 } = route.params || {};
-  const [isLoading, setIsLoading] = useState(true);
-  const [store, setStore] = useState(null);
+  const [store, setStore] = useState<Store | null>(null);
   const [storeItems, setStoreItems] = useState<StoreItem[]>([]);
+  const [showAllHours, setShowAllHours] = useState(false);
   const { toggleFavoriteStore, isFavoriteStore } = useFavorites();
   const favoriteScale = useRef(new Animated.Value(1)).current;
 
-  async function fetchStoreDetails() {
+  const dayOrder = useMemo(
+    () => ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
+    [],
+  );
+
+  const toTitleCase = (value: string) => {
+    if (!value) {
+      return value;
+    }
+
+    return value
+      .split(' ')
+      .filter(Boolean)
+      .map((segment) => segment[0].toUpperCase() + segment.slice(1))
+      .join(' ');
+  };
+
+  const normalizedHours = useMemo(() => {
+    if (!store?.workingHours?.length) {
+      return [] as WorkingHours[];
+    }
+
+    const hoursByDay = new Map(
+      store.workingHours.map((entry) => [entry.day.toLowerCase(), entry]),
+    );
+
+    return dayOrder.map((day) =>
+      hoursByDay.get(day) || { day, openTime: '', closeTime: '' },
+    );
+  }, [dayOrder, store?.workingHours]);
+
+  const todayHours = useMemo(() => {
+    if (!normalizedHours.length) {
+      return null;
+    }
+
+    const todayIndex = (new Date().getDay() + 6) % 7;
+    return normalizedHours[todayIndex];
+  }, [normalizedHours]);
+
+  const formatHours = (hours: WorkingHours | null) => {
+    if (!hours || (!hours.openTime && !hours.closeTime)) {
+      return 'Store is closed at the moment.';
+    }
+
+    if (!hours.openTime || !hours.closeTime) {
+      return hours.openTime || hours.closeTime;
+    }
+
+    return `${hours.openTime} - ${hours.closeTime}`;
+  };
+
+  const hasWorkingHours = normalizedHours.length > 0;
+
+  async function fetchStoreItems() {
     try {
       const response = await searchStoreItems(
         100000,
@@ -42,13 +97,32 @@ const StoreDetailsScreen = ({ route, navigation }: StoreDetailsScreenProps) => {
   }
   const fetchStoreItemsQuery = useQuery({
     queryKey: ["fetchStoreItems", id],
-    queryFn: fetchStoreDetails,
+    queryFn: fetchStoreItems,
   });
   React.useEffect(() => {
     if (fetchStoreItemsQuery.data && fetchStoreItemsQuery.status === "success") {
       setStoreItems(fetchStoreItemsQuery.data);
     }
   }, [fetchStoreItemsQuery.data, fetchStoreItemsQuery.status])
+
+  const fetchStoreDetailsQuery = useQuery({
+    queryKey: ['fetchStoreDetails', id],
+    queryFn: async () => {
+      try {
+        const response = await getOneStoreById(id);
+        return response.data;
+      } catch (error: any) {
+        showToast('error', 'Error', error.message || 'Failed to load store details. Please try again.');
+        return null;
+      }
+    },
+  });
+
+  React.useEffect(() => {
+    if (fetchStoreDetailsQuery.data && fetchStoreDetailsQuery.status === 'success') {
+      setStore(fetchStoreDetailsQuery.data);
+    }
+  }, [fetchStoreDetailsQuery.data, fetchStoreDetailsQuery.status]);
 
   const isFavorite = isFavoriteStore(id);
 
@@ -77,13 +151,13 @@ const StoreDetailsScreen = ({ route, navigation }: StoreDetailsScreenProps) => {
     toggleFavoriteStore(id);
   };
 
-  const handleItemPress = (item) => {
+  const handleItemPress = (item: StoreItem) => {
     navigation.navigate('ItemDetails', {
       id: item.id,
       name: item.name,
-      imageUri: generateImageUrl(item.photo.fileStoragePath),
-      description: item.description,
-      price: item.price,
+      imageUri: generateImageUrl((item as StoreItem).photo.fileStoragePath),
+      description: (item as StoreItem).description,
+      price: (item as StoreItem).price,
     });
   };
 
@@ -162,6 +236,68 @@ const StoreDetailsScreen = ({ route, navigation }: StoreDetailsScreenProps) => {
           <Text style={styles.subMeta}>
             {ratingCount} reviews
           </Text>
+        </View>
+
+        <View style={styles.hoursCard}>
+          <View style={styles.hoursHeader}>
+            <Text style={styles.hoursTitle}>Working hours</Text>
+            <Pressable style={styles.hoursToggle} onPress={() => setShowAllHours((prev) => !prev)}>
+              <Text style={styles.hoursToggleText}>{showAllHours ? 'Hide' : 'View all'}</Text>
+              <Ionicons name={showAllHours ? 'chevron-up' : 'chevron-down'} size={16} color={AUTH_COLORS.primaryDark} />
+            </Pressable>
+          </View>
+
+          <View style={styles.hoursRow}>
+            <Text style={styles.dayLabel}>Today</Text>
+            <Text
+              style={[
+                styles.hoursValue,
+                !hasWorkingHours || (!todayHours?.openTime && !todayHours?.closeTime)
+                  ? styles.hoursClosed
+                  : null,
+              ]}
+            >
+              {hasWorkingHours ? formatHours(todayHours) : 'Hours unavailable'}
+            </Text>
+          </View>
+
+          {showAllHours ? (
+            normalizedHours.length ? (
+              <View style={styles.weeklyList}>
+                {normalizedHours.map((entry) => (
+                  <View key={entry.day} style={styles.hoursRow}>
+                    <Text style={styles.dayLabel}>{toTitleCase(entry.day)}</Text>
+                    <Text
+                      style={[
+                        styles.hoursValue,
+                        !entry.openTime && !entry.closeTime ? styles.hoursClosed : null,
+                      ]}
+                    >
+                      {formatHours(entry)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.hoursEmpty}>Hours unavailable</Text>
+            )
+          ) : null}
+
+          <View style={styles.holidayBadge}>
+            <Ionicons
+              name={store?.isAvailableOnHolidays ? 'sunny-outline' : 'moon-outline'}
+              size={14}
+              color={store?.isAvailableOnHolidays ? '#1B8A3F' : '#B42318'}
+            />
+            <Text
+              style={[
+                styles.holidayText,
+                store?.isAvailableOnHolidays ? styles.holidayOpenText : styles.holidayClosedText,
+              ]}
+            >
+              {store?.isAvailableOnHolidays ? 'Open on holidays' : 'Closed on holidays'}
+            </Text>
+          </View>
         </View>
 
         {fetchStoreItemsQuery.isPending ? (
@@ -270,6 +406,82 @@ const styles = StyleSheet.create({
   subMeta: {
     fontSize: 14,
     color: AUTH_COLORS.muted,
+  },
+  hoursCard: {
+    backgroundColor: AUTH_COLORS.card,
+    borderRadius: 18,
+    padding: AUTH_SPACING.block,
+    gap: 10,
+    shadowColor: AUTH_COLORS.shadow,
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  hoursHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  hoursTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: AUTH_COLORS.text,
+  },
+  hoursToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  hoursToggleText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: AUTH_COLORS.primaryDark,
+  },
+  weeklyList: {
+    gap: 6,
+  },
+  hoursRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dayLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: AUTH_COLORS.text,
+  },
+  hoursValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: AUTH_COLORS.text,
+  },
+  hoursClosed: {
+    color: AUTH_COLORS.muted,
+  },
+  hoursEmpty: {
+    fontSize: 12,
+    color: AUTH_COLORS.muted,
+  },
+  holidayBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: AUTH_COLORS.primarySoft,
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    alignSelf: 'flex-start',
+  },
+  holidayText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  holidayOpenText: {
+    color: '#1B8A3F',
+  },
+  holidayClosedText: {
+    color: '#B42318',
   },
   feedbackState: {
     alignItems: 'center',

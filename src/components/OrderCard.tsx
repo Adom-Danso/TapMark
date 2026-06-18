@@ -230,12 +230,12 @@ const OrderCard = ({ order, onPress, onReorder }: { order: Order; onPress: () =>
         <HeaderRow>
           <OrderNumber>{order.orderNumber}</OrderNumber>
           <StatusPill background={statusStyle.background}>
-            <StatusText color={statusStyle.color}>{order.orderStatus}</StatusText>
+            <StatusText color={statusStyle.color}>{getStageLabel(order.orderStatus)}</StatusText>
           </StatusPill>
         </HeaderRow>
 
 
-        <Divider />
+        {/* <Divider /> */}
 
         {/* Info Rows: Date, Items, ETA (if pending) */}
         <InfoRow>

@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "687760980300",
+    "project_id": "tapmark-e8d88",
+    "storage_bucket": "tapmark-e8d88.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:687760980300:android:372d0fec06abcfd68c77e9",
+        "android_client_info": {
+          "package_name": "com.lewishall.TapMark"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAM9oeKd06l8Rlu2lc7c9dbB5W9ApMqf_8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:687760980300:android:c94dd7a792cf28258c77e9",
+        "android_client_info": {
+          "package_name": "com.lewishall.TapMarkSeller"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAM9oeKd06l8Rlu2lc7c9dbB5W9ApMqf_8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -44,7 +44,12 @@ const LoginPage = ({ navigation }: LoginProps) => {
 				phone: response.data.phoneNumber,
 				otherNames: response.data.otherNames,
 			})
-			navigation.replace("Main");
+			
+			if (response.data.userType == "regular") {
+				navigation.replace("Main");
+			} else {
+				showToast("error", "Invalid Account")
+			}
 		} catch (err: any) {
 			if (err.statusCode === 403) {
 				navigation.navigate("Otp", {

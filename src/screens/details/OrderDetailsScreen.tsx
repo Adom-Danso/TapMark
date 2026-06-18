@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View, TouchableOpacity, Modal, Linking, Image } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View, TouchableOpacity, Modal, Linking, Image, Animated, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute } from '@react-navigation/native';
+import QRCode from 'react-native-qrcode-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AUTH_COLORS, AUTH_SPACING } from '../auth/authTheme';
+import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from '../auth/authTheme';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { getOneOrderById } from '@/functions/orders/get-one-order-by-id';
 import { showToast } from '@/utils/notifications';
@@ -11,6 +12,8 @@ import { Order } from '@/schemas/orders';
 import { useLocation } from '@/context/LocationContext';
 import { generateImageUrl } from '@/utils/shared';
 import { updateOneOrder } from '@/functions/orders/update-one-order-by-id';
+import { OTPCode } from '@/schemas/otp-codes';
+import { addOneOTPCode, RequestBody } from '@/functions/verifications/add-one-otp-code';
 
 const ORDER_TIMELINE_STEPS = ['placed', 'assigned', 'processing', 'pick_up_completed', 'completed'] as const;
 
@@ -36,7 +39,7 @@ const normaliseOrderStage = (order?: Order) => {
     return "preparing"
   }
 
-  if (order.isPickedUp) {
+  if (order.isPickedUp && !order.isOrderCompleted) {
     return 'pick_up_completed';
   }
 
@@ -57,7 +60,6 @@ const getTimelineStepIndex = (normalizedStage?: string | null) => {
     case 'assigned':
       return 2;
     case 'pick_up_completed':
-    case 'picked_up':
       return 3;
     case 'completed':
     case 'delivered':
@@ -110,17 +112,24 @@ const TimelineStep = ({ stepKey, isActive, isComplete, isLast }: { stepKey: Time
   );
 };
 
-const OrderDetailsScreen = ({navigation}: {navigation:any}) => {
+const ANIMATION_DURATION = 220;
+
+
+const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
   const route = useRoute<any>();
   const insets = useSafeAreaInsets();
   const orderId = route.params?.orderId;
   const { getLocationName } = useLocation()
 
   const [order, setOrder] = useState<Order | null>(null)
+  const scale = useState(new Animated.Value(0.9))[0];
+  const fade = useState(new Animated.Value(0))[0];
   const orderStatus = String((order as any)?.orderStatus || (order as any)?.status || '').toLowerCase();
   const activeStepIndex = getTimelineStepIndex(normaliseOrderStage(order as Order));
   const isCompleted = orderStatus === 'completed' || orderStatus === 'delivered';
   const [showCourierModal, setShowCourierModal] = useState(false);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [otpCode, setOtpCode] = useState<OTPCode | null>(null);
 
   const fetchOneOrderQuery = useQuery({
     queryKey: ["fetchOneOrder", orderId],
@@ -153,6 +162,44 @@ const OrderDetailsScreen = ({navigation}: {navigation:any}) => {
     },
     onError: (error: any) => {
       showToast("error", error.message || "Failed to update order")
+    }
+  })
+  const closeModal = () => {
+    Animated.timing(fade, {
+      toValue: 0,
+      duration: ANIMATION_DURATION,
+      useNativeDriver: true,
+    }).start(() => {
+      scale.setValue(0.9);
+      setIsModalVisible(false);
+    });
+  };
+  const addOneOtpCodeMutation = useMutation({
+    mutationKey: ["addOneOtpCode"],
+    mutationFn: async (payload: RequestBody) => {
+      if (otpCode) return otpCode
+      const response = await addOneOTPCode(payload)
+      setOtpCode(response.data)
+      return response.data;
+    },
+    onSuccess: (data) => {
+      setIsModalVisible(true)
+      Animated.parallel([
+        Animated.timing(fade, {
+          toValue: 1,
+          duration: ANIMATION_DURATION,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scale, {
+          toValue: 1,
+          useNativeDriver: true,
+          speed: 18,
+          bounciness: 6,
+        }),
+      ]).start();
+    },
+    onError: (error) => {
+      showToast("error", error.message || "Failed to initiate verification")
     }
   })
 
@@ -294,7 +341,7 @@ const OrderDetailsScreen = ({navigation}: {navigation:any}) => {
               <Text style={styles.sectionTitle}>Summary</Text>
               <View style={styles.breakdownRow}>
                 <Text style={styles.breakdownLabel}>Subtotal</Text>
-                <Text style={styles.breakdownValue}>{formatMoney(order.subtotal)}</Text>
+                <Text style={styles.breakdownValue}>{formatMoney(order.payment.amount - order.deliveryFee - order.serviceFee)}</Text>
               </View>
               <View style={styles.breakdownRow}>
                 <Text style={styles.breakdownLabel}>Delivery fee</Text>
@@ -311,22 +358,78 @@ const OrderDetailsScreen = ({navigation}: {navigation:any}) => {
               </View>
             </View>
 
+            {order.isPickedUp && !order.isOrderCompleted && (
+              <TouchableOpacity
+                style={[styles.actionButton, styles.confirmButton, addOneOtpCodeMutation.isPending && styles.actionButtonDisabled]}
+                onPress={() => addOneOtpCodeMutation.mutate({
+                  userId: order?.assignedCourierId as string,
+                  orderId: order?.id,
+                  otpType: "pickup_verification",
+                  cartItemIds: order?.cart.cartItems.map((value) => value.id)
+                })}
+                activeOpacity={0.85}
+                disabled={addOneOtpCodeMutation.isPending}
+              >
+                {addOneOtpCodeMutation.isPending ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-done" size={18} color="#fff" style={{ marginRight: 6 }} />
+                    <Text style={styles.actionButtonText}>Confirm Order Completion</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
             {!order.isPickedUp && order.orderStatus !== 'cancelled' && (
               <TouchableOpacity
-                style={[styles.cancelButton, updateOneOrderMutation.isPending && styles.cancelButtonDisabled]}
+                style={[styles.actionButton, styles.cancelButton, updateOneOrderMutation.isPending && styles.actionButtonDisabled]}
                 onPress={() => updateOneOrderMutation.mutate({ orderStatus: 'cancelled' })}
                 activeOpacity={0.85}
                 disabled={updateOneOrderMutation.isPending}
               >
-                <Ionicons name="close-circle-outline" size={18} color="#fff" />
-                <Text style={styles.cancelButtonText}>
-                  {updateOneOrderMutation.isPending ? 'Cancelling...' : 'Cancel Order'}
-                </Text>
+                {updateOneOrderMutation.isPending ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="close-circle-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
+                    <Text style={styles.actionButtonText}>Cancel Order</Text>
+                  </>
+                )}
               </TouchableOpacity>
             )}
           </>
         )}
       </ScrollView>
+      <Modal
+        visible={isModalVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={closeModal}
+      >
+        <View style={styles.modalBackdrop}>
+          <Animated.View
+            style={[
+              styles.modalCard,
+              { opacity: fade, transform: [{ scale }] },
+            ]}
+          >
+            <Text style={styles.modalTitle}>Pickup confirmation</Text>
+            <Text style={styles.modalSubtitle}>
+              Let the courier scan the QR or call out this OTP.
+            </Text>
+            <View style={styles.qrWrap}>
+              <QRCode value={otpCode ? otpCode.code : ""} size={180} color={AUTH_COLORS.text} />
+            </View>
+            <View style={styles.otpWrap}>
+              <Text style={styles.otpLabel}>One-time code</Text>
+              <Text style={styles.otpValue}>{otpCode ? otpCode.code : ""}</Text>
+            </View>
+            <Pressable style={styles.modalClose} onPress={closeModal}>
+              <Text style={styles.modalCloseText}>Done</Text>
+            </Pressable>
+          </Animated.View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -345,6 +448,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: AUTH_COLORS.text,
+  },
+  confirmText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
   loadingCard: {
     alignItems: 'center',
@@ -642,29 +750,70 @@ const styles = StyleSheet.create({
   modalCloseText: {
     color: AUTH_COLORS.muted,
   },
-  cancelButton: {
+  actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    backgroundColor: '#DC3545',
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderRadius: 12,
     marginTop: 4,
+    gap: 6,
     shadowColor: '#000',
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.10,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
-  cancelButtonDisabled: {
+  actionButtonDisabled: {
     opacity: 0.6,
   },
-  cancelButtonText: {
+  actionButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  confirmButton: {
+    backgroundColor: AUTH_COLORS.primary,
+  },
+  cancelButton: {
+    backgroundColor: '#DC3545',
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    textAlign: 'center',
+    color: AUTH_COLORS.muted,
+    marginTop: 8,
+    marginBottom: AUTH_SPACING.block,
+  },
+  qrWrap: {
+    padding: AUTH_SPACING.block,
+    borderRadius: AUTH_RADII.card,
+    backgroundColor: AUTH_COLORS.background,
+  },
+  otpWrap: {
+    alignItems: 'center',
+    marginTop: AUTH_SPACING.block,
+  },
+  otpLabel: {
+    fontSize: 11,
+    letterSpacing: 1.2,
+    fontWeight: '700',
+    color: AUTH_COLORS.muted,
+    textTransform: 'uppercase',
+  },
+  otpValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: AUTH_COLORS.primary,
+    letterSpacing: 6,
+    marginTop: 6,
+  },
+  emptyBody: {
+    fontSize: 14,
+    color: AUTH_COLORS.muted,
+    marginTop: 8,
   },
 });
 

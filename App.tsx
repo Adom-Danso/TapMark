@@ -1,9 +1,10 @@
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { ImageBackground, StyleSheet } from 'react-native';
+import { ImageBackground, StyleSheetc, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Toast from 'react-native-toast-message';
 import * as SplashScreen from "expo-splash-screen"
+import * as Notifications from 'expo-notifications';
 
 import WelcomePage from './src/screens/auth/WelcomePage';
 import LoginPage from './src/screens/auth/LoginPage';
@@ -22,12 +23,24 @@ const queryClient = new QueryClient();
 
 const Stack = createNativeStackNavigator();
 SplashScreen.preventAutoHideAsync()
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 export default function App() {
   const [isAppReady, setIsAppReady] = useState(false)
   const [initialScreen, setInitialScreen] = useState('Welcome');
 
-  React.useEffect(()=>{
+  React.useEffect(() => {
+    const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
+      // navigate to appropriate screen based on notification response
+    });
+
     const prepareApp = async () => {
       try {
         const { accessToken, refreshToken } = await getTokens();
@@ -44,7 +57,10 @@ export default function App() {
       }
     }
     prepareApp();
-  },[])
+    return () => {
+      responseListener.remove();
+    };
+  }, [])
 
   React.useEffect(() => {
     if (isAppReady) {
@@ -57,27 +73,27 @@ export default function App() {
   }
 
   return (
-      <SafeAreaView style={{ flex: 1 }}>
-        <QueryClientProvider client={queryClient}>
-          <FavoritesProvider>
-            <PaymentMethodsProvider>
-              <NavigationContainer>
-                <Stack.Navigator
-                  initialRouteName={initialScreen}
-                  screenOptions={{ headerShown: false, animation: 'slide_from_right' }}
-                >
-                  <Stack.Screen name="Welcome" component={WelcomePage} />
-                  <Stack.Screen name="Login" component={LoginPage} />
-                  <Stack.Screen name="Signup" component={SignupPage} />
-                  <Stack.Screen name="Otp" component={OtpPage} />
-                  <Stack.Screen name="Splash" component={CustomSplashScreen} />
-                  <Stack.Screen name="Main" component={BottomTabs} />
-                </Stack.Navigator>
-                <Toast />
-              </NavigationContainer>
-            </PaymentMethodsProvider>
-          </FavoritesProvider>
-        </QueryClientProvider>
-      </SafeAreaView>
+    <SafeAreaView style={{ flex: 1 }}>
+      <QueryClientProvider client={queryClient}>
+        <FavoritesProvider>
+          <PaymentMethodsProvider>
+            <NavigationContainer>
+              <Stack.Navigator
+                initialRouteName={initialScreen}
+                screenOptions={{ headerShown: false, animation: 'slide_from_right' }}
+              >
+                <Stack.Screen name="Welcome" component={WelcomePage} />
+                <Stack.Screen name="Login" component={LoginPage} />
+                <Stack.Screen name="Signup" component={SignupPage} />
+                <Stack.Screen name="Otp" component={OtpPage} />
+                <Stack.Screen name="Splash" component={CustomSplashScreen} />
+                <Stack.Screen name="Main" component={BottomTabs} />
+              </Stack.Navigator>
+              <Toast />
+            </NavigationContainer>
+          </PaymentMethodsProvider>
+        </FavoritesProvider>
+      </QueryClientProvider>
+    </SafeAreaView>
   );
 }

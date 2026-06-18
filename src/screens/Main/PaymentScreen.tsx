@@ -454,6 +454,9 @@ const PaymentScreen = ({ route, navigation }: any) => {
           <Text style={styles.subtitle}>
             Choose your {paymentTypeLabel} method
           </Text>
+          <Text style={styles.subtitle}>
+            You will be paying {amountToPay}
+          </Text>
         </View>
 
         <View style={styles.methodsWrap}>

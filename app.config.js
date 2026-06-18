@@ -21,6 +21,7 @@ module.exports = {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#801718"
       },
+      "googleServicesFile": "./google-services.json",
       "package": "com.lewishall.TapMark"
     },
     "web": {
@@ -59,6 +60,9 @@ module.exports = {
           },
           "resizeMode": "contain",
         }
+      ],
+      [
+        "expo-notifications"
       ]
     ],
     "extra": {

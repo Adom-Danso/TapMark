@@ -17,6 +17,9 @@ import { useProfile } from '@/context/ProfileContext';
 import { getCartInvoice } from '@/functions/cart/get-cart-invoice';
 import { CartInvoice } from '@/schemas/cart';
 import { updateOneCartItem } from '@/functions/cart-items/update-cart-item-by-id';
+import { clearActiveCartId } from '@/utils/cart';
+import { updateOneCart } from '@/functions/cart/update-one-cart';
+import ConfirmationModal from '@/components/ConfirmationModal';
 
 const PAYMENT_METHODS = [
   { id: 'mobile-money', label: 'Mobile Money', icon: 'phone-portrait-outline' },
@@ -40,8 +43,8 @@ const parseMoney = (value: unknown): number => {
 const CartScreen = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { currentLocation, isLoading: isLocationLoading } = useLocation();
-  const { cartLines, updateCartLineQty, removeCartLine, updateCartLine, isLoading, activeCartId, updateCartLineItemAmount } = useCart();
+  const { currentLocation, isLoading: isLocationLoading, addLocation } = useLocation();
+  const { cartLines, updateCartLineQty, removeCartLine, updateCartLine, isLoading, activeCartId, updateCartLineItemAmount, refreshCart } = useCart();
   const { profileData, userWallet } = useProfile();
 
   const [instructions, setInstructions] = useState('');
@@ -51,6 +54,8 @@ const CartScreen = () => {
   const [edits, setEdits] = useState({});
   const [amountEdits, setAmountEdits] = useState<Record<string, string>>({});
   const emptyFloat = useRef(new Animated.Value(0)).current;
+  const [confirmationModalVisible,setConfirmationModalVisible] = useState(false)
+  const [confirmationType, setConfirmationType] = useState("pending")
 
   const addOneTempOrderMutation = useMutation({
     mutationKey: ['addOneTempOrder'],
@@ -66,11 +71,42 @@ const CartScreen = () => {
       showToast("error", "Order Failed", error.message || "An error occurred while initiating your order. Please try again.");
     },
     onSuccess: (data) => {
-      setTimeout(() => {
-        navigation.navigate('Payment', { paymentType: paymentMethod, tempOrderId: data.data.id, amountToPay: cartInvoice?.totalAmount });
-      }, 1200);
+      // setTimeout(() => {
+      //   navigation.navigate('Payment', { paymentType: paymentMethod, tempOrderId: data.data.id, amountToPay: cartInvoice?.totalAmount });
+      // }, 100);
+      updateCartMutation.mutate({ isOrderCompleted: true })
+      showToast("info", "You will be notified to proceed to payment")
     }
   });
+
+  const handleConfirmationRetry = () => {
+    updateCartItemMutation.mutate({isPickupComplete: true})
+  }
+
+  const updateCartMutation = useMutation({
+    mutationKey: ["updateCart"],
+    mutationFn: async (payload: any) => {
+      setConfirmationType("pending")
+      setConfirmationModalVisible(true);
+      const response = await updateOneCart(payload, activeCartId as string)
+      return response
+    },
+    onSuccess: (data) => {
+      clearActiveCartId();
+      setConfirmationType("success")
+      addLocation(currentLocation!);
+      refreshCart()
+      setTimeout(() => {
+        setConfirmationModalVisible(false);
+      }, 200);
+    },
+    onError: (error) => {
+      setConfirmationType("failure")
+      setTimeout(() => {
+        setConfirmationModalVisible(false);
+      }, 200);
+    },
+  })
 
   async function fetchCartInvoice() {
     try {
@@ -221,17 +257,17 @@ const CartScreen = () => {
     typeof currentLocation?.latitude === 'number' && typeof currentLocation?.longitude === 'number';
   const region = hasMapCoordinates
     ? {
-        latitude: currentLocation.latitude,
-        longitude: currentLocation.longitude,
-        latitudeDelta: 0.015,
-        longitudeDelta: 0.015,
-      }
+      latitude: currentLocation.latitude,
+      longitude: currentLocation.longitude,
+      latitudeDelta: 0.015,
+      longitudeDelta: 0.015,
+    }
     : undefined;
   const markerCoord = hasMapCoordinates
     ? {
-        latitude: currentLocation.latitude,
-        longitude: currentLocation.longitude,
-      }
+      latitude: currentLocation.latitude,
+      longitude: currentLocation.longitude,
+    }
     : undefined;
 
   const toggleEdit = (item: CartLineType) => {
@@ -485,68 +521,68 @@ const CartScreen = () => {
                     ) : null}
                     {item.note ? <Text style={styles.itemNote}>Note: {item.note}</Text> : null}
                     <View style={styles.itemMetaRow}>
-                    {
-                      item.isSoldPerUnit ? (
-                        <>
-                          <TouchableOpacity
-                            activeOpacity={0.8}
-                            onPress={() => handleDecrease(item.cartLineId)}
-                            style={styles.qtyButton}
-                          >
-                            <Ionicons name="remove" size={16} color={AUTH_COLORS.text} />
-                          </TouchableOpacity>
-                          <Text style={styles.qtyValue}>{item.qty}</Text>
-                          <TouchableOpacity
-                            activeOpacity={0.8}
-                            onPress={() => handleIncrease(item.cartLineId)}
-                            style={styles.qtyButton}
-                          >
-                            <Ionicons name="add" size={16} color={AUTH_COLORS.text} />
-                          </TouchableOpacity>
-                        </>
+                      {
+                        item.isSoldPerUnit ? (
+                          <>
+                            <TouchableOpacity
+                              activeOpacity={0.8}
+                              onPress={() => handleDecrease(item.cartLineId)}
+                              style={styles.qtyButton}
+                            >
+                              <Ionicons name="remove" size={16} color={AUTH_COLORS.text} />
+                            </TouchableOpacity>
+                            <Text style={styles.qtyValue}>{item.qty}</Text>
+                            <TouchableOpacity
+                              activeOpacity={0.8}
+                              onPress={() => handleIncrease(item.cartLineId)}
+                              style={styles.qtyButton}
+                            >
+                              <Ionicons name="add" size={16} color={AUTH_COLORS.text} />
+                            </TouchableOpacity>
+                          </>
 
-                      ) : (
-                        <View>
-                          {(() => {
-                            const draftAmount = amountEdits[item.cartLineId];
-                            const hasUncommittedAmountChange = draftAmount !== undefined && draftAmount !== item.itemAmount.toString();
+                        ) : (
+                          <View>
+                            {(() => {
+                              const draftAmount = amountEdits[item.cartLineId];
+                              const hasUncommittedAmountChange = draftAmount !== undefined && draftAmount !== item.itemAmount.toString();
 
-                            return (
-                              <>
-                          <TextInput
-                            value={amountEdits[item.cartLineId] ?? item.itemAmount.toString()}
-                            onChangeText={(t) => handleAmountEditChange(item.cartLineId, t)}
-                            keyboardType="decimal-pad"
-                            style={styles.amountInputSimple}
-                            />
-                              {hasUncommittedAmountChange ? (
-                                <View style={styles.editActionsRow}>
-                                  <TouchableOpacity style={styles.saveButton} onPress={() => handleAmountEditSave(item.cartLineId)}>
-                                    <Text style={styles.saveText}>Save</Text>
-                                  </TouchableOpacity>
-                                  <TouchableOpacity style={styles.cancelButton} onPress={() => handleAmountEditCancel(item.cartLineId)}>
-                                    <Text style={styles.cancelText}>Cancel</Text>
-                                  </TouchableOpacity>
-                                </View>
-                              ) : null}
-                              </>
-                            );
-                          })()}
-                        </View>
-                      )
-                    }
-                          <TouchableOpacity
-                            activeOpacity={0.85}
-                            onPress={() => toggleEdit(item)}
-                            style={[styles.editPill, expandedId === item.cartLineId ? styles.editPillActive : null]}
-                          >
-                            <Ionicons
-                              name={expandedId === item.cartLineId ? 'chevron-up-outline' : 'chevron-down-outline'}
-                              size={16}
-                              color={expandedId === item.cartLineId ? '#fff' : AUTH_COLORS.primary}
-                            />
-                            <Text style={[styles.editPillText, expandedId === item.cartLineId ? styles.editPillTextActive : null]}>{expandedId === item.cartLineId ? 'Close' : 'Edit'}</Text>
-                          </TouchableOpacity>
+                              return (
+                                <>
+                                  <TextInput
+                                    value={amountEdits[item.cartLineId] ?? item.itemAmount.toString()}
+                                    onChangeText={(t) => handleAmountEditChange(item.cartLineId, t)}
+                                    keyboardType="decimal-pad"
+                                    style={styles.amountInputSimple}
+                                  />
+                                  {hasUncommittedAmountChange ? (
+                                    <View style={styles.editActionsRow}>
+                                      <TouchableOpacity style={styles.saveButton} onPress={() => handleAmountEditSave(item.cartLineId)}>
+                                        <Text style={styles.saveText}>Save</Text>
+                                      </TouchableOpacity>
+                                      <TouchableOpacity style={styles.cancelButton} onPress={() => handleAmountEditCancel(item.cartLineId)}>
+                                        <Text style={styles.cancelText}>Cancel</Text>
+                                      </TouchableOpacity>
+                                    </View>
+                                  ) : null}
+                                </>
+                              );
+                            })()}
+                          </View>
+                        )
+                      }
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={() => toggleEdit(item)}
+                        style={[styles.editPill, expandedId === item.cartLineId ? styles.editPillActive : null]}
+                      >
+                        <Ionicons
+                          name={expandedId === item.cartLineId ? 'chevron-up-outline' : 'chevron-down-outline'}
+                          size={16}
+                          color={expandedId === item.cartLineId ? '#fff' : AUTH_COLORS.primary}
+                        />
+                        <Text style={[styles.editPillText, expandedId === item.cartLineId ? styles.editPillTextActive : null]}>{expandedId === item.cartLineId ? 'Close' : 'Edit'}</Text>
+                      </TouchableOpacity>
                     </View>
                   </View>
                   <View style={styles.itemActions}>
@@ -642,7 +678,7 @@ const CartScreen = () => {
                 <TouchableOpacity
                   key={method.id}
                   activeOpacity={0.85}
-                  disabled={method.id=="tapmark-wallet" && userWallet.availableBalance < (cartInvoice ? cartInvoice.totalAmount : 0)}
+                  disabled={method.id == "tapmark-wallet" && userWallet.availableBalance < (cartInvoice ? cartInvoice.totalAmount : 0)}
                   style={[styles.paymentItem, isActive ? styles.paymentItemActive : null]}
                   onPress={() => setPaymentMethod(method.id)}
                 >
@@ -677,6 +713,16 @@ const CartScreen = () => {
       <LoadingBackdrop
         visible={addOneTempOrderMutation.isPending || isCartOperationLoading}
         message={addOneTempOrderMutation.isPending ? "Processing order..." : "Updating cart..."}
+      />
+      {/* Confirmation Modal (success / failure / pending) */}
+      <ConfirmationModal
+        visible={confirmationModalVisible}
+        type={confirmationType}
+        onSuccess={() => 1}
+        onRetry={handleConfirmationRetry}
+        successMessage="Order Placed! You will be notified to proceed to payment"
+        failureMessage="Failed to place order"
+        pendingMessage="Placing order."
       />
     </View>
   );
