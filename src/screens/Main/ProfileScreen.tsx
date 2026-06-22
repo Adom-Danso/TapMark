@@ -18,7 +18,7 @@ import { ProfileData } from '@/schemas/profile';
 import { UserWallet } from '@/schemas/wallets';
 import { getOneUserWallets } from '@/functions/wallets/get-one-wallet-by-id';
 import { showToast } from '@/utils/notifications';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { addOneUserWallets } from '@/functions/wallets/add-one-user-wallet';
 import { useProfile } from '@/context/ProfileContext';
 import { usePaymentMethods } from '@/context/PaymentMethodsContext';
@@ -26,6 +26,7 @@ import { clearFavorites } from '@/utils/favourites';
 import { clearLocations } from '@/utils/locations';
 import { clearActiveCartId } from '@/utils/cart';
 import { clearTokens } from '@/utils/tokens';
+import { deleteOneNotificationTokens } from '@/functions/notification-tokens/delete-user-notification-tokens';
 
 const ActionRow = ({ icon, title, subtitle, onPress }: { icon: string; title: string; subtitle: string; onPress: () => void }) => {
   const scale = useRef(new Animated.Value(1)).current;
@@ -47,7 +48,7 @@ const ActionRow = ({ icon, title, subtitle, onPress }: { icon: string; title: st
       bounciness: 8,
     }).start();
   };
- 
+
 
   return (
     <Animated.View style={{ transform: [{ scale }] }}>
@@ -75,12 +76,12 @@ const ProfileScreen = ({ navigation, route }: { navigation: any; route: any }) =
   const insets = useSafeAreaInsets();
   const { favoriteStores } = useFavorites();
   const { currentLocation } = useLocation();
-  const {paymentMethods} = usePaymentMethods()
+  const { paymentMethods } = usePaymentMethods()
 
   const [bannerMessage, setBannerMessage] = useState('');
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [visibleBalance, setVisibleBalance] = useState(0);
-  const {profileData, userWallet} = useProfile()
+  const { profileData, userWallet } = useProfile()
 
   const cardIntro = useRef(new Animated.Value(0)).current;
   const walletIntro = useRef(new Animated.Value(0)).current;
@@ -91,14 +92,14 @@ const ProfileScreen = ({ navigation, route }: { navigation: any; route: any }) =
 
   const goToAuthWelcome = () => {
     const rootNav = navigation.getParent()?.getParent();
-    (async ()=> {
+    (async () => {
       await clearFavorites();
       await clearProfileData();
       await clearLocations();
       await clearActiveCartId();
       await clearTokens();
     })()
-    
+
     if (rootNav) {
       rootNav.reset({
         index: 0,
@@ -109,6 +110,22 @@ const ProfileScreen = ({ navigation, route }: { navigation: any; route: any }) =
 
     navigation.navigate('Welcome');
   };
+
+  
+  const deleteNotificationTokensMutations = useMutation({
+    mutationKey: ["deleteUserNotificationTokens"],
+    mutationFn: async () => {
+      const response = deleteOneNotificationTokens()
+      return response
+    },
+    onSuccess: (data) => {
+      goToAuthWelcome()
+    },
+    onError: (error) => {
+      showToast("error", "No internet connections")
+    },
+    retry: 2
+  })
 
 
 
@@ -190,7 +207,7 @@ const ProfileScreen = ({ navigation, route }: { navigation: any; route: any }) =
           setIsLoggingOut(true);
           setTimeout(() => {
             setIsLoggingOut(false);
-            goToAuthWelcome();
+            deleteNotificationTokensMutations.mutate()
           }, 450);
         },
       },
