@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View, TouchableOpacity, Modal, Linking, Image, Animated, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute } from '@react-navigation/native';
@@ -14,8 +14,25 @@ import { generateImageUrl } from '@/utils/shared';
 import { updateOneOrder } from '@/functions/orders/update-one-order-by-id';
 import { OTPCode } from '@/schemas/otp-codes';
 import { addOneOTPCode, RequestBody } from '@/functions/verifications/add-one-otp-code';
+import MapView, { Marker, Polyline } from 'react-native-maps';
+import RatingModal from '@/components/RatingModal';
+import ReportModal from '@/components/ReportModal';
 
-const ORDER_TIMELINE_STEPS = ['placed', 'assigned', 'processing', 'pick_up_completed', 'completed'] as const;
+const ORDER_TIMELINE_STEPS = ['placed', 'processing', 'assigned', 'pick_up_completed', 'completed'] as const;
+
+type OrderStage = (typeof ORDER_TIMELINE_STEPS)[number] | 'cancelled';
+
+type CourierLocation = {
+  latitude: number;
+  longitude: number;
+};
+
+type FeedbackTarget = {
+  targetType: string;
+  targetId: string;
+  title: string;
+  subtitle: string;
+};
 
 const STEP_META = {
   placed: { label: 'Placed', icon: 'checkmark-circle-outline' },
@@ -26,32 +43,31 @@ const STEP_META = {
   cancelled: { label: "Cancelled", icon: 'close' }
 } as const;
 
-const normaliseOrderStage = (order?: Order) => {
+const normaliseOrderStage = (order?: Order): OrderStage => {
   if (!order) return 'placed';
 
   if (order.orderStatus === 'cancelled') return 'cancelled';
 
-  if (order.orderStatus === "processing" && !order.assignedCourierId) {
-    return 'placed';
-  }
-
-  if (order.orderStatus === 'processing' && order.assignedCourierId) {
-    return "preparing"
-  }
-
-  if (order.isPickedUp && !order.isOrderCompleted) {
-    return 'pick_up_completed';
-  }
-
-  if (order.isOrderCompleted) {
+  if (order.isOrderCompleted || order.orderStatus === 'delivered') {
     return 'completed';
   }
 
-  return order.orderStatus;
+  if (order.isPickedUp) {
+    return 'pick_up_completed';
+  }
+
+  if (order.orderStatus === "processing" && !order.assignedCourierId) {
+    return 'processing';
+  }
+
+  if (order.assignedCourierId || order.orderStatus === 'accepted') {
+    return 'assigned';
+  }
+
+  return 'placed';
 };
 
-const getTimelineStepIndex = (normalizedStage?: string | null) => {
-
+const getTimelineStepIndex = (normalizedStage?: OrderStage | null) => {
   switch (normalizedStage) {
     case 'placed':
       return 0;
@@ -62,7 +78,6 @@ const getTimelineStepIndex = (normalizedStage?: string | null) => {
     case 'pick_up_completed':
       return 3;
     case 'completed':
-    case 'delivered':
       return 4;
     default:
       return 0;
@@ -124,12 +139,41 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
   const [order, setOrder] = useState<Order | null>(null)
   const scale = useState(new Animated.Value(0.9))[0];
   const fade = useState(new Animated.Value(0))[0];
-  const orderStatus = String((order as any)?.orderStatus || (order as any)?.status || '').toLowerCase();
-  const activeStepIndex = getTimelineStepIndex(normaliseOrderStage(order as Order));
-  const isCompleted = orderStatus === 'completed' || orderStatus === 'delivered';
+  const [deliveryAddressName, setDeliveryAddressName] = useState<string>('Loading address...');
+  const [courierLocation, setCourierLocation] = useState<CourierLocation | null>(null);
+  const normalizedStage = normaliseOrderStage(order as Order | undefined);
+  const activeStepIndex = getTimelineStepIndex(normalizedStage);
+  const isCompleted = normalizedStage === 'completed';
+  const isProcessingStage = normalizedStage === 'processing';
+  const showTrackingMap = ['assigned', 'pick_up_completed', 'completed'].includes(normalizedStage);
+  const destinationLocation = order?.deliveryAddressGpsLocation;
+  const mapRegion = useMemo(() => {
+    if (!courierLocation || !destinationLocation) {
+      return null;
+    }
+
+    const centerLatitude = (courierLocation.latitude + destinationLocation.lat) / 2;
+    const centerLongitude = (courierLocation.longitude + destinationLocation.lng) / 2;
+
+    return {
+      latitude: centerLatitude,
+      longitude: centerLongitude,
+      latitudeDelta: Math.max(Math.abs(courierLocation.latitude - destinationLocation.lat) * 2.2, 0.02),
+      longitudeDelta: Math.max(Math.abs(courierLocation.longitude - destinationLocation.lng) * 2.2, 0.02),
+    };
+  }, [courierLocation, destinationLocation]);
   const [showCourierModal, setShowCourierModal] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [otpCode, setOtpCode] = useState<OTPCode | null>(null);
+  const [ratingTarget, setRatingTarget] = useState<FeedbackTarget | null>(null);
+  const [isReportModalVisible, setIsReportModalVisible] = useState(false);
+  const [reportComplaints] = useState([
+    'Package damaged',
+    'Courier was late',
+    'Wrong item delivered',
+    'Missing items',
+    'Delivery issue',
+  ]);
 
   const fetchOneOrderQuery = useQuery({
     queryKey: ["fetchOneOrder", orderId],
@@ -148,6 +192,37 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
       setOrder(fetchOneOrderQuery.data)
     }
   }, [fetchOneOrderQuery.data, fetchOneOrderQuery.status])
+
+  useEffect(() => {
+    if (!order) {
+      setDeliveryAddressName('Loading address...');
+      setCourierLocation(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    getLocationName(order.deliveryAddressGpsLocation.lat, order.deliveryAddressGpsLocation.lng)
+      .then((name) => {
+        if (!cancelled) {
+          setDeliveryAddressName(name || 'Not available');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDeliveryAddressName('Not available');
+        }
+      });
+
+    setCourierLocation({
+      latitude: order.deliveryAddressGpsLocation.lat + 0.0045,
+      longitude: order.deliveryAddressGpsLocation.lng - 0.004,
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [getLocationName, order]);
 
   const updateOneOrderMutation = useMutation({
     mutationKey: ["updateOneOrder", orderId],
@@ -204,6 +279,34 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
   })
 
   const isOrderLoading = fetchOneOrderQuery.isPending && !order;
+  const openOrderRating = () => {
+    if (!order?.id) {
+      return;
+    }
+
+    setRatingTarget({
+      targetType: 'order',
+      targetId: order.id,
+      title: 'Rate your delivery',
+      subtitle: 'Tell us how the package, timing, and overall experience went.',
+    });
+  };
+
+  const openCourierRating = () => {
+    const courierId = order?.courier?.id || order?.assignedCourierId;
+
+    if (!courierId) {
+      return;
+    }
+
+    setShowCourierModal(false);
+    setRatingTarget({
+      targetType: 'courier',
+      targetId: courierId,
+      title: 'Rate the courier',
+      subtitle: 'Tell us how the courier handled the delivery.',
+    });
+  };
 
   return (
     <View style={styles.container}>
@@ -234,7 +337,7 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
                   <Text style={styles.subtitle}>{formatDateTime(order.createdAt)}</Text>
                 </View>
                 <View style={styles.statusPill}>
-                  <Text style={styles.statusText}>{STEP_META[normaliseOrderStage(order) as keyof typeof STEP_META]?.label || 'Unknown'}</Text>
+                  <Text style={styles.statusText}>{STEP_META[normalizedStage as keyof typeof STEP_META]?.label || 'Unknown'}</Text>
                 </View>
               </View>
 
@@ -245,7 +348,6 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
                 </View>
                 <View style={styles.metaItem}>
                   <Text style={styles.metaLabel}>ETA</Text>
-                  <Text style={styles.metaValue}>{order.eta || 'N/A'}</Text>
                 </View>
                 <TouchableOpacity style={[styles.metaItem, styles.metaItemTouchable]} activeOpacity={0.85} onPress={() => setShowCourierModal(true)}>
                   <View style={styles.riderTileRow}>
@@ -264,20 +366,101 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
               </View>
             </View>
 
+            {isCompleted ? (
+              <View style={styles.sectionCard}>
+                <View style={styles.sectionHeaderRow}>
+                  <View>
+                    <Text style={styles.sectionTitle}>Share feedback</Text>
+                    <Text style={styles.sectionSubtitle}>Leave a delivery review and rate the courier from courier details.</Text>
+                  </View>
+                  <View style={styles.feedbackBadge}>
+                    <Text style={styles.feedbackBadgeText}>Post-delivery</Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity style={styles.primaryReviewButton} activeOpacity={0.9} onPress={openOrderRating}>
+                  <Ionicons name="star" size={18} color="#fff" />
+                  <View style={styles.primaryReviewCopy}>
+                    <Text style={styles.primaryReviewTitle}>Rate order</Text>
+                    <Text style={styles.primaryReviewSubtitle}>Review the package, timing, and overall experience.</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
+            {isProcessingStage ? (
+              <View style={styles.sectionCard}>
+                <View style={styles.searchHeader}>
+                  <View style={styles.searchIconWrap}>
+                    <ActivityIndicator color={AUTH_COLORS.primary} />
+                  </View>
+                  <View style={styles.searchTextWrap}>
+                    <Text style={styles.sectionTitle}>Searching for courier</Text>
+                    <Text style={styles.sectionSubtitle}>We are matching a rider to your order. You can keep following the summary below.</Text>
+                  </View>
+                </View>
+                <View style={styles.searchPillsRow}>
+                  <View style={styles.searchPill}>
+                    <Ionicons name="time-outline" size={14} color={AUTH_COLORS.primary} />
+                    <Text style={styles.searchPillText}>Preparing pickup</Text>
+                  </View>
+                  <View style={styles.searchPill}>
+                    <Ionicons name="bicycle-outline" size={14} color={AUTH_COLORS.primary} />
+                    <Text style={styles.searchPillText}>Courier not assigned yet</Text>
+                  </View>
+                </View>
+              </View>
+            ) : null}
+
+            {showTrackingMap && courierLocation && destinationLocation ? (
+              <View style={styles.sectionCard}>
+                <View style={styles.sectionHeaderRow}>
+                  <View>
+                    <Text style={styles.sectionTitle}>Courier tracking</Text>
+                    <Text style={styles.sectionSubtitle}>Live tracking will attach here once the courier is on the move.</Text>
+                  </View>
+                  <View style={styles.mapStatusPill}>
+                    <Text style={styles.mapStatusText}>{normalizedStage === 'pick_up_completed' ? 'On the way' : 'Assigned'}</Text>
+                  </View>
+                </View>
+                <View style={styles.mapWrap}>
+                  <MapView
+                    style={styles.map}
+                    initialRegion={mapRegion || undefined}
+                    region={mapRegion || undefined}
+                  >
+                    <Marker coordinate={courierLocation} pinColor={AUTH_COLORS.primary} />
+                    <Marker coordinate={{ latitude: destinationLocation.lat, longitude: destinationLocation.lng }} pinColor="#1B8A3F" />
+                    <Polyline
+                      coordinates={[
+                        courierLocation,
+                        { latitude: destinationLocation.lat, longitude: destinationLocation.lng },
+                      ]}
+                      strokeColor={AUTH_COLORS.primary}
+                      strokeWidth={4}
+                    />
+                  </MapView>
+                </View>
+              </View>
+            ) : null}
+
             <View style={styles.sectionCard}>
               <Text style={styles.sectionTitle}>Track order</Text>
               <Text style={styles.sectionSubtitle}>Follow the order journey from placement to delivery.</Text>
-              <View style={styles.timelineWrap}>
-                {ORDER_TIMELINE_STEPS.map((stepKey, index) => (
-                  <TimelineStep
-                    key={stepKey}
-                    stepKey={stepKey}
-                    isComplete={index < activeStepIndex || (isCompleted && stepKey === 'completed')}
-                    isActive={index === activeStepIndex}
-                    isLast={index === ORDER_TIMELINE_STEPS.length - 1}
-                  />
-                ))}
-              </View>
+              {!isProcessingStage ? (
+                <View style={styles.timelineWrap}>
+                  {ORDER_TIMELINE_STEPS.map((stepKey, index) => (
+                    <TimelineStep
+                      key={stepKey}
+                      stepKey={stepKey}
+                      isComplete={index < activeStepIndex || (isCompleted && stepKey === 'completed')}
+                      isActive={index === activeStepIndex}
+                      isLast={index === ORDER_TIMELINE_STEPS.length - 1}
+                    />
+                  ))}
+                </View>
+              ) : null}
             </View>
             {order?.courier && (
               <Modal
@@ -303,6 +486,12 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
                     >
                       <Text style={styles.modalPhoneText}>{order.courier.phoneNumber}</Text>
                     </TouchableOpacity>
+                    {isCompleted ? (
+                      <TouchableOpacity onPress={openCourierRating} style={styles.courierReviewButton} activeOpacity={0.9}>
+                        <Ionicons name="star-outline" size={16} color={AUTH_COLORS.primary} />
+                        <Text style={styles.courierReviewText}>Rate courier</Text>
+                      </TouchableOpacity>
+                    ) : null}
                     <TouchableOpacity onPress={() => setShowCourierModal(false)} style={styles.modalClose}>
                       <Text style={styles.modalCloseText}>Close</Text>
                     </TouchableOpacity>
@@ -315,7 +504,7 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
               <Text style={styles.sectionTitle}>Delivery info</Text>
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Address</Text>
-                <Text style={styles.infoValue}>{getLocationName(order.deliveryAddressGpsLocation.lat, order.deliveryAddressGpsLocation.lng).then(name => name) || 'Not available'}</Text>
+                <Text style={styles.infoValue}>{deliveryAddressName}</Text>
               </View>
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Instructions</Text>
@@ -330,7 +519,7 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
                   <View key={item.id} style={styles.itemRow}>
                     <Text style={styles.itemName}>{item.storeItem.name}</Text>
                     <Text style={styles.itemMeta}>
-                      {item.qty} x {formatMoney(item.storeItem.price)}
+                      {item.quantity} x {formatMoney(item.storeItem.price)}
                     </Text>
                   </View>
                 ))}
@@ -356,6 +545,27 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
                 <Text style={styles.breakdownTotal}>Total</Text>
                 <Text style={styles.breakdownTotal}>{formatMoney(order.payment.amount)}</Text>
               </View>
+            </View>
+
+            <View style={styles.sectionCard}>
+              <View style={styles.sectionHeaderRow}>
+                <View>
+                  <Text style={styles.sectionTitle}>Need help?</Text>
+                  <Text style={styles.sectionSubtitle}>If something went wrong, you can report it from here without leaving the page.</Text>
+                </View>
+                <View style={styles.helpBadge}>
+                  <Text style={styles.helpBadgeText}>Optional</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity style={styles.reportButton} activeOpacity={0.9} onPress={() => setIsReportModalVisible(true)}>
+                <Ionicons name="chatbox-ellipses-outline" size={18} color={AUTH_COLORS.text} />
+                <View style={styles.reportCopy}>
+                  <Text style={styles.reportTitle}>Report an issue</Text>
+                  <Text style={styles.reportSubtitle}>Use this for delays, damage, wrong items, or other delivery problems.</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={AUTH_COLORS.muted} />
+              </TouchableOpacity>
             </View>
 
             {order.isPickedUp && !order.isOrderCompleted && (
@@ -400,6 +610,27 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
           </>
         )}
       </ScrollView>
+      {ratingTarget ? (
+        <RatingModal
+          visible={!!ratingTarget}
+          title={ratingTarget.title}
+          subtitle={ratingTarget.subtitle}
+          targetType={ratingTarget.targetType}
+          targetId={ratingTarget.targetId}
+          onClose={() => setRatingTarget(null)}
+        />
+      ) : null}
+      {order ? (
+        <ReportModal
+          visible={isReportModalVisible}
+          title="Report an issue"
+          subtitle="Choose the complaint that fits best, add a short explanation, and include a photo if needed."
+          targetType="order"
+          targetId={order.id}
+          complaints={reportComplaints}
+          onClose={() => setIsReportModalVisible(false)}
+        />
+      ) : null}
       <Modal
         visible={isModalVisible}
         animationType="fade"
@@ -554,6 +785,73 @@ const styles = StyleSheet.create({
   sectionSubtitle: {
     fontSize: 13,
     color: AUTH_COLORS.muted,
+  },
+  searchHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  searchIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: AUTH_COLORS.primarySoft,
+  },
+  searchTextWrap: {
+    flex: 1,
+    gap: 4,
+  },
+  searchPillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 2,
+  },
+  searchPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: '#FFF8F6',
+    borderWidth: 1,
+    borderColor: AUTH_COLORS.line,
+  },
+  searchPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: AUTH_COLORS.text,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  mapStatusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: AUTH_COLORS.primarySoft,
+  },
+  mapStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: AUTH_COLORS.primary,
+  },
+  mapWrap: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: AUTH_COLORS.line,
+    height: 220,
+    backgroundColor: '#F6F1ED',
+  },
+  map: {
+    flex: 1,
   },
   timelineWrap: {
     gap: 12,
@@ -749,6 +1047,99 @@ const styles = StyleSheet.create({
   },
   modalCloseText: {
     color: AUTH_COLORS.muted,
+  },
+  feedbackBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: AUTH_COLORS.primarySoft,
+  },
+  feedbackBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: AUTH_COLORS.primary,
+  },
+  primaryReviewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: 74,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 18,
+    backgroundColor: AUTH_COLORS.primary,
+    shadowColor: AUTH_COLORS.primary,
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 2,
+  },
+  primaryReviewCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  primaryReviewTitle: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  primaryReviewSubtitle: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 12,
+  },
+  helpBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#F3EEE9',
+  },
+  helpBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: AUTH_COLORS.muted,
+  },
+  reportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 16,
+    backgroundColor: '#FBF8F6',
+    borderWidth: 1,
+    borderColor: AUTH_COLORS.line,
+  },
+  reportCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  reportTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: AUTH_COLORS.text,
+  },
+  reportSubtitle: {
+    fontSize: 12,
+    color: AUTH_COLORS.muted,
+  },
+  courierReviewButton: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: AUTH_COLORS.primarySoft,
+    borderWidth: 1,
+    borderColor: AUTH_COLORS.primary,
+    alignSelf: 'stretch',
+  },
+  courierReviewText: {
+    color: AUTH_COLORS.primary,
+    fontSize: 13,
+    fontWeight: '700',
   },
   actionButton: {
     flexDirection: 'row',

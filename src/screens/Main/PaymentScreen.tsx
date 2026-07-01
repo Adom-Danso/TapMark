@@ -473,9 +473,12 @@ const PaymentScreen = ({ route, navigation }: any) => {
         {/* Info card */}
         <View style={styles.infoCard}>
           <Ionicons name="information-circle-outline" size={18} color={AUTH_COLORS.primary} />
-          <Text style={styles.infoText}>
-            You will receive an OTP to verify this transaction.
-          </Text>
+          <View style={styles.infoTextWrap}>
+            <Text style={styles.infoTitle}>Payment prompt</Text>
+            <Text style={styles.infoText}>
+              You may receive a payment prompt on your phone. If it does not arrive, authorize the payment through your provider’s USSD flow.
+            </Text>
+          </View>
         </View>
       </ScrollView>
 
@@ -656,15 +659,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 10,
     marginTop: 8,
   },
-  infoText: {
+  infoTextWrap: {
     flex: 1,
+    gap: 2,
+  },
+  infoTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: AUTH_COLORS.text,
+  },
+  infoText: {
     fontSize: 12,
     color: AUTH_COLORS.text,
-    fontWeight: '500',
+    lineHeight: 18,
   },
   emptyCard: {
     borderRadius: AUTH_RADII.card,

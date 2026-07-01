@@ -30,16 +30,16 @@ const OrderNumber = styled.Text`
   color: ${AUTH_COLORS.text};
 `;
 
-const StatusPill = styled.View`
+const StatusPill = styled.View<{ $background?: string }>`
   padding: 6px 12px;
   border-radius: ${AUTH_RADII.pill}px;
-  background-color: ${(props) => props.background || AUTH_COLORS.primarySoft};
+  background-color: ${(props) => props.$background || AUTH_COLORS.primarySoft};
 `;
 
-const StatusText = styled.Text`
+const StatusText = styled.Text<{ $color?: string }>`
   font-size: 11px;
   font-weight: 800;
-  color: ${(props) => props.color || AUTH_COLORS.primary};
+  color: ${(props) => props.$color || AUTH_COLORS.primary};
   text-transform: uppercase;
 `;
 
@@ -111,11 +111,11 @@ const ProgressDots = styled.View`
   align-items: center;
 `;
 
-const ProgressDot = styled.View`
+const ProgressDot = styled.View<{ $active?: boolean }>`
   width: 6px;
   height: 6px;
   border-radius: 3px;
-  background-color: ${(props) => (props.active ? AUTH_COLORS.primary : AUTH_COLORS.line)};
+  background-color: ${(props) => (props.$active ? AUTH_COLORS.primary : AUTH_COLORS.line)};
 `;
 
 const ProgressLabel = styled.Text`
@@ -127,11 +127,15 @@ const ProgressLabel = styled.Text`
 
 const getStatusStyle = (status: string) => {
   switch (status) {
+    case 'processing':
+    case 'accepted':
+    case 'placed':
+      return { background: AUTH_COLORS.primarySoft, color: AUTH_COLORS.primary };
     case 'completed':
+    case 'delivered':
       return { background: '#D9F3E1', color: '#0F8A3C' };
-    case 'pending':
-      return { background: '#FFF1D6', color: '#B45309' };
     case 'cancelled':
+    case 'rejected':
       return { background: '#FBE2E2', color: '#B42318' };
     default:
       return { background: AUTH_COLORS.primarySoft, color: AUTH_COLORS.primary };
@@ -158,7 +162,7 @@ type OrderStatusLabels = {
   [key: string]: string;
 }
 
-const getStageLabel = (trackingStage: keyof OrderStatusLabels) => {
+const getStageLabel = (trackingStage: string) => {
   const labels: OrderStatusLabels = {
     placed: 'Order placed',
     processing: 'Preparing',
@@ -170,11 +174,36 @@ const getStageLabel = (trackingStage: keyof OrderStatusLabels) => {
   return labels[trackingStage] || 'Pending';
 };
 
+const getTrackingStage = (order: Order) => {
+  if (order.isOrderCompleted || order.orderStatus === 'delivered') {
+    return 'completed';
+  }
+
+  if (order.orderStatus === 'cancelled' || order.orderStatus === 'rejected') {
+    return 'cancelled';
+  }
+
+  if (order.isPickedUp) {
+    return 'pick_up_completed';
+  }
+
+  if (order.assignedCourierId || order.orderStatus === 'accepted') {
+    return 'assigned';
+  }
+
+  if (order.orderStatus === 'processing') {
+    return 'processing';
+  }
+
+  return 'placed';
+};
+
 const OrderCard = ({ order, onPress, onReorder }: { order: Order; onPress: () => void; onReorder: (order: Order) => void }) => {
   const statusStyle = getStatusStyle(order.orderStatus);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const reorderScaleAnim = useRef(new Animated.Value(1)).current;
-  const progressIndex = getProgressIndicator(order.orderStatus);
+  const trackingStage = getTrackingStage(order);
+  const progressIndex = getProgressIndicator(trackingStage);
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
@@ -212,7 +241,7 @@ const OrderCard = ({ order, onPress, onReorder }: { order: Order; onPress: () =>
     }).start();
   };
 
-  const handleReorderPress = (e) => {
+  const handleReorderPress = (e: any) => {
     e.stopPropagation();
     if (onReorder) {
       onReorder(order);
@@ -229,8 +258,8 @@ const OrderCard = ({ order, onPress, onReorder }: { order: Order; onPress: () =>
         {/* Header: Order Number & Status */}
         <HeaderRow>
           <OrderNumber>{order.orderNumber}</OrderNumber>
-          <StatusPill background={statusStyle.background}>
-            <StatusText color={statusStyle.color}>{getStageLabel(order.orderStatus)}</StatusText>
+          <StatusPill $background={statusStyle.background}>
+            <StatusText $color={statusStyle.color}>{getStageLabel(trackingStage)}</StatusText>
           </StatusPill>
         </HeaderRow>
 
@@ -248,20 +277,13 @@ const OrderCard = ({ order, onPress, onReorder }: { order: Order; onPress: () =>
           <Value>{order.cart.cartItems.length}</Value>
         </InfoRow> */}
 
-        {order.orderStatus === 'pending' && order.eta && (
-          <InfoRow>
-            <Label>ETA</Label>
-            <Value>{order.eta}</Value>
-          </InfoRow>
-        )}
-
         {/* Progress Indicator for Pending Orders */}
         {(
           <ProgressDots>
             {TRACKING_STAGES.map((stage, idx) => (
-              <ProgressDot key={stage} active={idx <= progressIndex} />
+              <ProgressDot key={stage} $active={idx <= progressIndex} />
             ))}
-            <ProgressLabel>{getStageLabel(order.orderStatus)}</ProgressLabel>
+            <ProgressLabel>{getStageLabel(trackingStage)}</ProgressLabel>
           </ProgressDots>
         )}
 

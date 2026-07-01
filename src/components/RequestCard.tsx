@@ -1,4 +1,5 @@
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from '@/screens/auth/authTheme';
+import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 
@@ -23,6 +24,7 @@ export default function RequestCard({
         </View>
 
         <View style={styles.statusBadge}>
+          <Ionicons name="time-outline" size={12} color="#B45309" />
           <Text style={styles.statusText}>
             Pending Payment
           </Text>
@@ -34,7 +36,7 @@ export default function RequestCard({
       </Text>
 
       <Text style={styles.subtitle}>
-        Your order is waiting for payment confirmation.
+        Your order is waiting for payment confirmation. Tap to continue to checkout.
       </Text>
 
       <View style={styles.bottomRow}>
@@ -53,6 +55,8 @@ const styles = StyleSheet.create({
     backgroundColor: AUTH_COLORS.card,
     borderRadius: AUTH_RADII.card,
     padding: AUTH_SPACING.block,
+    borderWidth: 1,
+    borderColor: AUTH_COLORS.line,
     shadowColor: AUTH_COLORS.shadow,
     shadowOpacity: 1,
     shadowRadius: 10,
@@ -71,7 +75,7 @@ const styles = StyleSheet.create({
   },
 
   orderBadge: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: AUTH_COLORS.primarySoft,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
@@ -79,15 +83,18 @@ const styles = StyleSheet.create({
 
   orderBadgeText: {
     fontSize: 12,
-    fontWeight: "600",
-    color: "#475569",
+    fontWeight: "700",
+    color: AUTH_COLORS.primary,
   },
 
   statusBadge: {
-    backgroundColor: "#FEF3C7",
+    backgroundColor: "#FFF1D6",
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
 
   statusText: {
@@ -97,16 +104,16 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: AUTH_COLORS.text,
     marginBottom: 6,
   },
 
   subtitle: {
     fontSize: 14,
     lineHeight: 20,
-    color: "#64748B",
+    color: AUTH_COLORS.muted,
   },
 
   bottomRow: {

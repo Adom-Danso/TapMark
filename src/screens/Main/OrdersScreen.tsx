@@ -38,6 +38,9 @@ const OrdersScreen = () => {
   const [isFetchingCartInvoice, setIsFetchingCartInvoice] = useState(false);
   const tabWidth = railWidth > 0 ? (railWidth - 8) / 3 : 0;
   const activeIndex = activeTab === 'pending' ? 0 : activeTab === 'current' ? 1 : 2;
+  const isPendingTab = activeTab === 'pending';
+  const isCurrentTab = activeTab === 'current';
+  const isPastTab = activeTab === 'past';
 
   const [requests, setRequests] = React.useState<TempOrders[]>([]);
 
@@ -244,94 +247,158 @@ const OrdersScreen = () => {
           flex: 1,
         }}
       >
-        <FlatList
-          data={activeTab !== "pending" ? orders : requests}
-          renderItem={activeTab !== "pending" ? renderOrderItem : renderRequest}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={[
-            styles.cardList,
-            { paddingHorizontal: AUTH_SPACING.screenX, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 80 },
-          ]}
-          showsVerticalScrollIndicator={false}
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.4}
-          ListEmptyComponent={renderEmptyState}
-          ListFooterComponent={renderFooter}
-          ListHeaderComponent={
-            <View style={styles.headerContent}>
-              <Text style={styles.title}>Orders</Text>
-              <View
-                style={styles.tabRail}
-                onLayout={(event) => setRailWidth(event.nativeEvent.layout.width)}
-              >
-                <Animated.View
-                  pointerEvents="none"
-                  style={[
-                    styles.tabPill,
-                    {
-                      width: tabWidth,
-                      transform: [{ translateX: pillTranslate }],
-                    },
-                  ]}
-                />
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  style={styles.tabButton}
-                  onPress={() => setActiveTab('pending')}
+        {activeTab === 'pending' ? (
+          <FlatList
+            data={requests}
+            renderItem={renderRequest as any}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={[
+              styles.cardList,
+              { paddingHorizontal: AUTH_SPACING.screenX, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 80 },
+            ]}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={renderEmptyState}
+            ListHeaderComponent={
+              <View style={styles.headerContent}>
+                <Text style={styles.title}>Orders</Text>
+                <View
+                  style={styles.tabRail}
+                  onLayout={(event) => setRailWidth(event.nativeEvent.layout.width)}
                 >
-                  <Ionicons
-                    name="time-outline"
-                    size={16}
-                    color={activeTab === 'pending' ? AUTH_COLORS.primary : AUTH_COLORS.muted}
-                  />
-                  <Text
+                  <Animated.View
+                    pointerEvents="none"
                     style={[
-                      styles.tabLabel,
-                      activeTab === 'pending' ? styles.tabLabelActive : null,
+                      styles.tabPill,
+                      {
+                        width: tabWidth,
+                        transform: [{ translateX: pillTranslate }],
+                      },
                     ]}
-                  >
-                    Pending
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  style={styles.tabButton}
-                  onPress={() => setActiveTab('current')}
-                >
-                  <Ionicons
-                    name="time-outline"
-                    size={16}
-                    color={activeTab === 'current' ? AUTH_COLORS.primary : AUTH_COLORS.muted}
                   />
-                  <Text
-                    style={[
-                      styles.tabLabel,
-                      activeTab === 'current' ? styles.tabLabelActive : null,
-                    ]}
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={styles.tabButton}
+                    onPress={() => setActiveTab('pending')}
                   >
-                    Current
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  style={styles.tabButton}
-                  onPress={() => setActiveTab('past')}
-                >
-                  <Ionicons
-                    name="archive-outline"
-                    size={16}
-                    color={activeTab === 'past' ? AUTH_COLORS.primary : AUTH_COLORS.muted}
-                  />
-                  <Text
-                    style={[styles.tabLabel, activeTab === 'past' ? styles.tabLabelActive : null]}
+                    <Ionicons
+                      name="time-outline"
+                      size={16}
+                      color={isPendingTab ? AUTH_COLORS.primary : AUTH_COLORS.muted}
+                    />
+                    <Text style={[styles.tabLabel, isPendingTab ? styles.tabLabelActive : null]}>
+                      Pending
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={styles.tabButton}
+                    onPress={() => setActiveTab('current')}
                   >
-                    Past
-                  </Text>
-                </TouchableOpacity>
+                    <Ionicons
+                      name="time-outline"
+                      size={16}
+                      color={isCurrentTab ? AUTH_COLORS.primary : AUTH_COLORS.muted}
+                    />
+                    <Text style={[styles.tabLabel, isCurrentTab ? styles.tabLabelActive : null]}>
+                      Current
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={styles.tabButton}
+                    onPress={() => setActiveTab('past')}
+                  >
+                    <Ionicons
+                      name="archive-outline"
+                      size={16}
+                      color={isPastTab ? AUTH_COLORS.primary : AUTH_COLORS.muted}
+                    />
+                    <Text style={[styles.tabLabel, isPastTab ? styles.tabLabelActive : null]}>
+                      Past
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
-          }
-        />
+            }
+          />
+        ) : (
+          <FlatList
+            data={orders}
+            renderItem={renderOrderItem}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={[
+              styles.cardList,
+              { paddingHorizontal: AUTH_SPACING.screenX, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 80 },
+            ]}
+            showsVerticalScrollIndicator={false}
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.4}
+            ListEmptyComponent={renderEmptyState}
+            ListFooterComponent={renderFooter}
+            ListHeaderComponent={
+              <View style={styles.headerContent}>
+                <Text style={styles.title}>Orders</Text>
+                <View
+                  style={styles.tabRail}
+                  onLayout={(event) => setRailWidth(event.nativeEvent.layout.width)}
+                >
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[
+                      styles.tabPill,
+                      {
+                        width: tabWidth,
+                        transform: [{ translateX: pillTranslate }],
+                      },
+                    ]}
+                  />
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={styles.tabButton}
+                    onPress={() => setActiveTab('pending')}
+                  >
+                    <Ionicons
+                      name="time-outline"
+                      size={16}
+                      color={isPendingTab ? AUTH_COLORS.primary : AUTH_COLORS.muted}
+                    />
+                    <Text style={[styles.tabLabel, isPendingTab ? styles.tabLabelActive : null]}>
+                      Pending
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={styles.tabButton}
+                    onPress={() => setActiveTab('current')}
+                  >
+                    <Ionicons
+                      name="time-outline"
+                      size={16}
+                      color={isCurrentTab ? AUTH_COLORS.primary : AUTH_COLORS.muted}
+                    />
+                    <Text style={[styles.tabLabel, isCurrentTab ? styles.tabLabelActive : null]}>
+                      Current
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={styles.tabButton}
+                    onPress={() => setActiveTab('past')}
+                  >
+                    <Ionicons
+                      name="archive-outline"
+                      size={16}
+                      color={isPastTab ? AUTH_COLORS.primary : AUTH_COLORS.muted}
+                    />
+                    <Text style={[styles.tabLabel, isPastTab ? styles.tabLabelActive : null]}>
+                      Past
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            }
+          />
+        )}
       </Animated.View>
       <LoadingBackdrop
         visible={isFetchingCartInvoice}
