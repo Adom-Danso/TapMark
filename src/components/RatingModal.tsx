@@ -2,6 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from '../screens/auth/authTheme';
+import { useMutation } from '@tanstack/react-query';
+import { addOneRating } from '@/functions/rating/add-one-rating';
+import { showToast } from '@/utils/notifications';
+import { addBatchRating } from '@/functions/rating/add-batch-ratings';
 
 type RatingModalProps = {
   visible: boolean;
@@ -9,6 +13,7 @@ type RatingModalProps = {
   subtitle: string;
   targetType: string;
   targetId: string;
+  orderId: string;
   onClose: () => void;
 };
 
@@ -22,49 +27,56 @@ const helperLabelByScore: Record<number, string> = {
   5: 'Great',
 };
 
-const RatingModal = ({ visible, title, subtitle, targetType, targetId, onClose }: RatingModalProps) => {
+const RatingModal = ({ visible, title, subtitle, targetType, targetId, onClose, orderId }: RatingModalProps) => {
   const [score, setScore] = useState(0);
   const [review, setReview] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const canSubmit = useMemo(() => score > 0 && review.trim().length > 0, [review, score]);
+
+  const addOneRatingMutation = useMutation({
+    mutationKey: ["addOneRating"],
+    mutationFn: async () => {
+      if (!canSubmit) {
+        throw Error("Please, complete the form");
+      }
+
+      const response = await addBatchRating([{
+        score: score,
+        review: review,
+        targetId: targetId,
+        targetType: targetType,
+        orderId: orderId,
+      }])
+      return response.data
+    },
+    onSuccess: (data) => {
+      showToast("success", "Thank you for your review")
+      onClose();
+      setScore(0)
+      setReview("")
+    },
+    onError: (error) => {
+      showToast("error", error.message || "Error submitting your review")
+    }
+  })
 
   useEffect(() => {
     if (!visible) {
       setScore(0);
       setReview('');
-      setIsSubmitting(false);
     }
   }, [visible]);
 
-  const canSubmit = useMemo(() => score > 0 && review.trim().length > 0 && !isSubmitting, [isSubmitting, review, score]);
 
   const handleClose = () => {
-    if (isSubmitting) {
+    if (addOneRatingMutation.isPending) {
       return;
     }
     onClose();
   };
 
   const handleSubmit = () => {
-    if (!canSubmit) {
-      return;
-    }
-
-    const payload = {
-      target_type: targetType,
-      target_id: targetId,
-      score,
-      review: review.trim(),
-    };
-
-    void payload;
-
-    setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setScore(0);
-      setReview('');
-      onClose();
-    }, 900);
+    addOneRatingMutation.mutate()
   };
 
   return (
@@ -138,7 +150,7 @@ const RatingModal = ({ visible, title, subtitle, targetType, targetId, onClose }
               onPress={handleSubmit}
               disabled={!canSubmit}
             >
-              {isSubmitting ? (
+              {addOneRatingMutation.isPending ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.submitButtonText}>Submit review</Text>

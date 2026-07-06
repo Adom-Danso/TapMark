@@ -1,58 +1,80 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from '../screens/auth/authTheme';
+import { useMutation } from '@tanstack/react-query';
+import { addOneReport } from '@/functions/reports/add-one-report';
+import { showToast } from '@/utils/notifications';
 
 type ReportModalProps = {
   visible: boolean;
   title: string;
   subtitle: string;
-  targetType: string;
   targetId: string;
-  complaints: string[];
+  complaints: Record<string, string>;
   onClose: () => void;
 };
 
-type EvidenceAsset = {
-  uri: string;
-  fileName?: string | null;
-  type?: string | null;
-};
 
-const ReportModal = ({ visible, title, subtitle, targetType, targetId, complaints, onClose }: ReportModalProps) => {
+type EvidenceAsset = {
+  uri: string,
+  name: string,
+  type: string,
+}
+
+const ReportModal = ({ visible, title, subtitle, targetId, complaints, onClose }: ReportModalProps) => {
   const [selectedComplaint, setSelectedComplaint] = useState('');
   const [description, setDescription] = useState('');
   const [evidence, setEvidence] = useState<EvidenceAsset | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPickingImage, setIsPickingImage] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const formData = useRef<FormData>(new FormData())
+  const canSubmit = useMemo(
+    () => selectedComplaint.trim().length > 0 && description.trim().length > 0,
+    [description, selectedComplaint],
+  );
+  
+  const addOneReportMutation = useMutation({
+    mutationKey: ["addOneReport"],
+    mutationFn: async () => {
+      if (!canSubmit) {
+        throw Error("Please complete the form");
+      }
+
+      const response = await addOneReport(formData.current)
+      return response.data
+    },
+    onSuccess: (data)=> {
+      showToast("info", "Your complaint was submitted"),
+      onClose();
+    },
+    onError: (error) => {
+      showToast("error", error.message || "Error submitting complaint")
+    }
+  })
+
 
   useEffect(() => {
     if (!visible) {
       setSelectedComplaint('');
       setDescription('');
       setEvidence(null);
-      setIsSubmitting(false);
       setIsPickingImage(false);
       setPermissionDenied(false);
     }
   }, [visible]);
 
-  const canSubmit = useMemo(
-    () => selectedComplaint.trim().length > 0 && description.trim().length > 0 && !isSubmitting,
-    [description, isSubmitting, selectedComplaint],
-  );
 
   const handleClose = () => {
-    if (isSubmitting) {
+    if (addOneReportMutation.isPending) {
       return;
     }
     onClose();
   };
 
   const handlePickEvidence = async () => {
-    if (isPickingImage || isSubmitting) {
+    if (isPickingImage || addOneReportMutation.isPending) {
       return;
     }
 
@@ -75,9 +97,9 @@ const ReportModal = ({ visible, title, subtitle, targetType, targetId, complaint
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
         setEvidence({
+          name: asset.fileName || "report_evidence",
+          type: asset.type || "image",
           uri: asset.uri,
-          fileName: asset.fileName,
-          type: asset.type,
         });
       }
     } finally {
@@ -86,25 +108,12 @@ const ReportModal = ({ visible, title, subtitle, targetType, targetId, complaint
   };
 
   const handleSubmit = () => {
-    if (!canSubmit) {
-      return;
-    }
+    formData.current.append("evidence_photo", evidence as any)
+    formData.current.append("report_type", selectedComplaint)
+    formData.current.append("reported_party_id", targetId)
+    formData.current.append("report_description", description.trim())
 
-    const payload = {
-      target_type: targetType,
-      target_id: targetId,
-      complaint: selectedComplaint,
-      description: description.trim(),
-      evidence,
-    };
-
-    void payload;
-
-    setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-      onClose();
-    }, 1100);
+    addOneReportMutation.mutate()
   };
 
   return (
@@ -128,7 +137,7 @@ const ReportModal = ({ visible, title, subtitle, targetType, targetId, complaint
             <View style={styles.sectionBlock}>
               <Text style={styles.fieldLabel}>What happened?</Text>
               <View style={styles.chipGrid}>
-                {complaints.map((complaint) => {
+                {Object.keys(complaints).map((complaint) => {
                   const active = selectedComplaint === complaint;
 
                   return (
@@ -137,7 +146,7 @@ const ReportModal = ({ visible, title, subtitle, targetType, targetId, complaint
                       onPress={() => setSelectedComplaint(complaint)}
                       style={({ pressed }) => [styles.chip, active ? styles.chipActive : null, pressed ? styles.chipPressed : null]}
                     >
-                      <Text style={[styles.chipText, active ? styles.chipTextActive : null]}>{complaint}</Text>
+                      <Text style={[styles.chipText, active ? styles.chipTextActive : null]}>{complaints[complaint]}</Text>
                     </Pressable>
                   );
                 })}
@@ -168,7 +177,7 @@ const ReportModal = ({ visible, title, subtitle, targetType, targetId, complaint
                   <Image source={{ uri: evidence.uri }} style={styles.previewImage} />
                   <View style={styles.previewCopy}>
                     <Text style={styles.previewTitle}>Photo attached</Text>
-                    <Text style={styles.previewMeta}>{evidence.fileName || 'Captured from camera'}</Text>
+                    <Text style={styles.previewMeta}>{evidence.name || 'Captured from camera'}</Text>
                   </View>
                   <TouchableOpacity
                     onPress={() => setEvidence(null)}
@@ -200,7 +209,7 @@ const ReportModal = ({ visible, title, subtitle, targetType, targetId, complaint
               onPress={handleSubmit}
               disabled={!canSubmit}
             >
-              {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Submit report</Text>}
+              {addOneReportMutation.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Submit report</Text>}
             </TouchableOpacity>
           </View>
         </View>

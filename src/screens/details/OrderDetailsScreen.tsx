@@ -167,13 +167,13 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
   const [otpCode, setOtpCode] = useState<OTPCode | null>(null);
   const [ratingTarget, setRatingTarget] = useState<FeedbackTarget | null>(null);
   const [isReportModalVisible, setIsReportModalVisible] = useState(false);
-  const [reportComplaints] = useState([
-    'Package damaged',
-    'Courier was late',
-    'Wrong item delivered',
-    'Missing items',
-    'Delivery issue',
-  ]);
+  const [reportComplaints] = useState<Record<string, string>>({
+    "courier_bad_language": "Bad Language from courier",
+    "order_compromise_by_courier": "Courier tempered with the order",
+    "courier_puctuality": "Courier was too late",
+    "other": "Other (please specify)",
+  });
+
 
   const fetchOneOrderQuery = useQuery({
     queryKey: ["fetchOneOrder", orderId],
@@ -369,7 +369,7 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
             {isCompleted ? (
               <View style={styles.sectionCard}>
                 <View style={styles.sectionHeaderRow}>
-                  <View>
+                  <View style={styles.summaryTextWrap}>
                     <Text style={styles.sectionTitle}>Share feedback</Text>
                     <Text style={styles.sectionSubtitle}>Leave a delivery review and rate the courier from courier details.</Text>
                   </View>
@@ -416,7 +416,7 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
             {showTrackingMap && courierLocation && destinationLocation ? (
               <View style={styles.sectionCard}>
                 <View style={styles.sectionHeaderRow}>
-                  <View>
+                  <View style={styles.summaryTextWrap}>
                     <Text style={styles.sectionTitle}>Courier tracking</Text>
                     <Text style={styles.sectionSubtitle}>Live tracking will attach here once the courier is on the move.</Text>
                   </View>
@@ -549,7 +549,7 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
 
             <View style={styles.sectionCard}>
               <View style={styles.sectionHeaderRow}>
-                <View>
+                <View style={styles.summaryTextWrap}>
                   <Text style={styles.sectionTitle}>Need help?</Text>
                   <Text style={styles.sectionSubtitle}>If something went wrong, you can report it from here without leaving the page.</Text>
                 </View>
@@ -610,13 +610,14 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
           </>
         )}
       </ScrollView>
-      {ratingTarget ? (
+      {ratingTarget && order ? (
         <RatingModal
           visible={!!ratingTarget}
           title={ratingTarget.title}
           subtitle={ratingTarget.subtitle}
           targetType={ratingTarget.targetType}
           targetId={ratingTarget.targetId}
+          orderId={order.id}
           onClose={() => setRatingTarget(null)}
         />
       ) : null}
@@ -625,7 +626,6 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
           visible={isReportModalVisible}
           title="Report an issue"
           subtitle="Choose the complaint that fits best, add a short explanation, and include a photo if needed."
-          targetType="order"
           targetId={order.id}
           complaints={reportComplaints}
           onClose={() => setIsReportModalVisible(false)}
