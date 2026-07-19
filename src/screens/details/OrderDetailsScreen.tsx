@@ -17,6 +17,7 @@ import { addOneOTPCode, RequestBody } from '@/functions/verifications/add-one-ot
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import RatingModal from '@/components/RatingModal';
 import ReportModal from '@/components/ReportModal';
+import { getCourierLocation } from '@/functions/directions/get-courier-location';
 
 const ORDER_TIMELINE_STEPS = ['placed', 'processing', 'assigned', 'pick_up_completed', 'completed'] as const;
 
@@ -140,7 +141,7 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
   const scale = useState(new Animated.Value(0.9))[0];
   const fade = useState(new Animated.Value(0))[0];
   const [deliveryAddressName, setDeliveryAddressName] = useState<string>('Loading address...');
-  const [courierLocation, setCourierLocation] = useState<CourierLocation | null>(null);
+  const [courierLocation, setCourierLocation] = useState<CourierLocation | null>({latitude: 0.1, longitude: 0.1});
   const normalizedStage = normaliseOrderStage(order as Order | undefined);
   const activeStepIndex = getTimelineStepIndex(normalizedStage);
   const isCompleted = normalizedStage === 'completed';
@@ -174,6 +175,27 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
     "other": "Other (please specify)",
   });
 
+  const shouldFetchCourierLocation = !!order && showTrackingMap && !!order.assignedCourierId
+  const fetchCourierLocationQuery = useQuery({
+    queryKey: ["fetchCourierLocation", order, order?.assignedCourierId],
+    queryFn: async () => {
+      try {
+        const response = await getCourierLocation(order?.assignedCourierId as string)
+        return response.data
+      } catch (error: any) {
+        showToast("info", "Could not update courier location.")
+        return null
+      }
+    },
+    enabled: shouldFetchCourierLocation,
+    refetchInterval: 5000,
+  })
+  React.useEffect(()=>{
+    if (fetchCourierLocationQuery.status == "success" && fetchCourierLocationQuery.data) {
+      setCourierLocation({latitude: fetchCourierLocationQuery.data.latitude, longitude: fetchCourierLocationQuery.data.longitude})
+    }
+  }, [fetchCourierLocationQuery.status, fetchCourierLocationQuery.data])
+
 
   const fetchOneOrderQuery = useQuery({
     queryKey: ["fetchOneOrder", orderId],
@@ -185,7 +207,9 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
         showToast("error", error.message || "Order not found")
         return null
       }
-    }
+    },
+    retry: 3,
+    refetchInterval: 20000
   })
   React.useEffect(() => {
     if (fetchOneOrderQuery.data && fetchOneOrderQuery.status == "success") {
@@ -196,7 +220,7 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
   useEffect(() => {
     if (!order) {
       setDeliveryAddressName('Loading address...');
-      setCourierLocation(null);
+      setCourierLocation({latitude: 0.1, longitude: 0.1});
       return;
     }
 
@@ -214,11 +238,6 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
         }
       });
 
-    setCourierLocation({
-      latitude: order.deliveryAddressGpsLocation.lat + 0.0045,
-      longitude: order.deliveryAddressGpsLocation.lng - 0.004,
-    });
-
     return () => {
       cancelled = true;
     };
@@ -226,7 +245,7 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
 
   const updateOneOrderMutation = useMutation({
     mutationKey: ["updateOneOrder", orderId],
-    mutationFn: async (updates: Partial<Order>) => {
+    mutationFn: async (updates: Partial<Order>) => {``
       const response = updateOneOrder(orderId, updates)
       return response
     },
