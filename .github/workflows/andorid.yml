@@ -35,6 +35,9 @@ jobs:
   
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
+
+      - name: Setup Gradle Cache
+        uses: gradle/actions/setup-gradle@v4
   
       - name: Compile App with Gradle
         run: ./gradlew assembleRelease
