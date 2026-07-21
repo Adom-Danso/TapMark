@@ -2,6 +2,11 @@
 
 This document only lists architecture details that are directly observable in the codebase. Each statement is linked to a source file.
 
+## Developer Orientation
+- Start with [App.tsx](App.tsx) to see how the app restores auth state, configures notifications, and chooses the initial stack route.
+- Move to [BottomTabs.tsx](BottomTabs.tsx) to understand the signed-in shell, tab structure, and the providers that wrap the main experience.
+- Then inspect [src/screens/Main/HomeStack.tsx](src/screens/Main/HomeStack.tsx), [src/context/CartContext.ts](src/context/CartContext.ts), [src/functions/auth/login.ts](src/functions/auth/login.ts), and [src/utils/axios-instance.ts](src/utils/axios-instance.ts) as concrete entry points into the feature, state, API, and helper layers.
+
 ## App Entry and Navigation
 - Root entry renders a `SafeAreaView` and wraps the app in `QueryClientProvider`, `FavoritesProvider`, and `PaymentMethodsProvider`, then mounts a native stack navigator with `Welcome`, `Login`, `Signup`, `Otp`, and `Main` routes. See [App.tsx](App.tsx#L1-L35).
 - `Main` renders the bottom tab navigator with five tabs: `Home`, `Cart`, `Search`, `Favourites`, and `Profile`. See [BottomTabs.tsx](BottomTabs.tsx#L154-L207).
