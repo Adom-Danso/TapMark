@@ -1,0 +1,48 @@
+name: Build test apk
+
+on:
+  push:
+    branches: [ "staging" ]
+  pull_request:
+    types: [closed]
+    branches: [ "staging" ]
+
+jobs:
+  build:
+    if: github.event_name == 'push' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+  
+      - name: set up node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+  
+      - name: Install Node dependencies
+        run: npm install
+  
+      - name: Generate Native Files
+        run: npx expo prebuild --clean --platform android
+  
+      - name: Grant execute permission for gradlew
+        run: chmod +x android/gradlew
+  
+      - name: Compile App with Gradle
+        run: ./gradlew assembleRelease
+        working-directory: android
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-test-apk
+          path: android/app/build/outputs/apk/release/*.apk
+          retention-days: 3
