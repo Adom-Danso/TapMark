@@ -27,6 +27,7 @@ import { clearLocations } from '@/utils/locations';
 import { clearActiveCartId } from '@/utils/cart';
 import { clearTokens } from '@/utils/tokens';
 import { deleteOneNotificationTokens } from '@/functions/notification-tokens/delete-user-notification-tokens';
+import { initiatePasswordReset } from '@/functions/auth/initiate-password-reset';
 
 const ActionRow = ({ icon, title, subtitle, onPress }: { icon: string; title: string; subtitle: string; onPress: () => void }) => {
   const scale = useRef(new Animated.Value(1)).current;
@@ -126,6 +127,27 @@ const ProfileScreen = ({ navigation, route }: { navigation: any; route: any }) =
     },
     retry: 2
   })
+
+  const changePasswordMutation = useMutation({
+    mutationKey: ["changePassword"],
+    mutationFn: async () => {
+      const response = await initiatePasswordReset(profileData.email);
+      return response;
+    },
+    onSuccess: () => {
+      showToast("success", "Check your email", "Password reset instructions have been sent to your email.")
+    },
+    onError: (error: any) => {
+      showToast("error", "Reset Failed", error.message || "An error occurred while sending the reset instructions. Please try again.")
+    }
+  })
+
+  const handleChangePassword = () => {
+    if (changePasswordMutation.isPending) {
+      return;
+    }
+    changePasswordMutation.mutate();
+  };
 
 
 
@@ -286,6 +308,12 @@ const ProfileScreen = ({ navigation, route }: { navigation: any; route: any }) =
             title="Edit personal information"
             subtitle="Update your name, email, and phone"
             onPress={() => navigation.navigate('EditPersonalInfo')}
+          />
+          <ActionRow
+            icon="key-outline"
+            title="Change password"
+            subtitle="Send password reset instructions to your email"
+            onPress={handleChangePassword}
           />
           <ActionRow
             icon="card-outline"

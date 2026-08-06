@@ -9,6 +9,7 @@ import * as Notifications from 'expo-notifications';
 import WelcomePage from './src/screens/auth/WelcomePage';
 import LoginPage from './src/screens/auth/LoginPage';
 import SignupPage from './src/screens/auth/SignupPage';
+import ForgotPasswordPage from './src/screens/auth/ForgotPasswordPage';
 import OtpPage from './src/screens/auth/OtpPage';
 import BottomTabs from './BottomTabs';
 import { FavoritesProvider } from './src/context/FavoritesContext';
@@ -85,6 +86,7 @@ export default function App() {
                 <Stack.Screen name="Welcome" component={WelcomePage} />
                 <Stack.Screen name="Login" component={LoginPage} />
                 <Stack.Screen name="Signup" component={SignupPage} />
+                <Stack.Screen name="ForgotPassword" component={ForgotPasswordPage} />
                 <Stack.Screen name="Otp" component={OtpPage} />
                 <Stack.Screen name="Splash" component={CustomSplashScreen} />
                 <Stack.Screen name="Main" component={BottomTabs} />
