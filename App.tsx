@@ -9,6 +9,7 @@ import * as Notifications from 'expo-notifications';
 import WelcomePage from './src/screens/auth/WelcomePage';
 import LoginPage from './src/screens/auth/LoginPage';
 import SignupPage from './src/screens/auth/SignupPage';
+import ForgotPasswordPage from './src/screens/auth/ForgotPasswordPage';
 import OtpPage from './src/screens/auth/OtpPage';
 import BottomTabs from './BottomTabs';
 import { FavoritesProvider } from './src/context/FavoritesContext';
@@ -18,6 +19,8 @@ import { useState } from 'react';
 import React from 'react';
 import { getTokens } from '@/utils/tokens';
 import CustomSplashScreen from './src/screens/Main/SplashScreen';
+import { navigationRef } from './src/navigation/navigationRef';
+
 
 const queryClient = new QueryClient();
 
@@ -77,7 +80,8 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <FavoritesProvider>
           <PaymentMethodsProvider>
-            <NavigationContainer>
+            <NavigationContainer ref={navigationRef}>
+
               <Stack.Navigator
                 initialRouteName={initialScreen}
                 screenOptions={{ headerShown: false, animation: 'slide_from_right' }}
@@ -85,6 +89,7 @@ export default function App() {
                 <Stack.Screen name="Welcome" component={WelcomePage} />
                 <Stack.Screen name="Login" component={LoginPage} />
                 <Stack.Screen name="Signup" component={SignupPage} />
+                <Stack.Screen name="ForgotPassword" component={ForgotPasswordPage} />
                 <Stack.Screen name="Otp" component={OtpPage} />
                 <Stack.Screen name="Splash" component={CustomSplashScreen} />
                 <Stack.Screen name="Main" component={BottomTabs} />

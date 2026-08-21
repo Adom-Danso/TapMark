@@ -2,31 +2,20 @@ import { SuccessResponse } from "@/schemas/shared";
 import { ApiError } from "@/schemas/shared";
 import { axiosInstance } from "@/utils/axios-instance";
 import axios from "axios";
-import { OTPCode, OtpTypes } from "@/schemas/otp-codes";
-
-export type RequestBody = {
-    userId: string,
-    otpType: OtpTypes,
-    cartItemIds?: string[],
-    orderId?: string,
-    should_send?: boolean,
-    channel?: "email" | "sms",
-    email?: string,
-    phone?: string,
-}
+import { User } from "@/schemas/user";
 
 
-export async function addOneOTPCode(
-    payload: RequestBody
-): Promise<SuccessResponse<OTPCode>> {
+export async function deleteOneUser(
+    userId: string
+): Promise<SuccessResponse<User>> {
     try {
-        const response = await axiosInstance.post(`/verifications`, payload);
-        return response.data as SuccessResponse<OTPCode>;
+        const response = await axiosInstance.delete(`/users/${userId}`);
+        return response.data as SuccessResponse<User>;
 
     } catch (error) {
         if (axios.isAxiosError(error)) {
             if (error.response) {
-                console.log(error.response.data)
+
                 if (typeof error.response.data.detail === 'string') {
                     throw new ApiError(error.response.data.detail, error.response.status);
                 } else {

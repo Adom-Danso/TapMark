@@ -13,7 +13,7 @@ module.exports = {
       "backgroundColor": "#801718"
     },
     "ios": {
-      "bundleIdentifier": "com.lewishall.TapMark",
+      "bundleIdentifier": "com.TapMark.regular",
       "supportsTablet": true
     },
     "android": {
@@ -22,7 +22,7 @@ module.exports = {
         "backgroundColor": "#801718"
       },
       "googleServicesFile": "./google-services.json",
-      "package": "com.lewishall.TapMark"
+      "package": "com.TapMark.regular"
     },
     "web": {
       "favicon": "./assets/favicon.png"

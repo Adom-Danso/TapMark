@@ -23,7 +23,9 @@ const OTP_LENGTH = 6;
  * @property {string} [phoneNumber]
  * @property {boolean} [isVerifying]
  * @property {boolean} [dismissible]
+ * @property {() => void} [onResend]
  */
+
 
 /**
  * OtpModal component
@@ -41,7 +43,9 @@ const OtpModal = ({
   phoneNumber = 'your phone',
   isVerifying = false,
   dismissible = true,
+  onResend,
 }) => {
+
   const [code, setCode] = useState(Array(OTP_LENGTH).fill(''));
   const [isVerifyingLocal, setIsVerifyingLocal] = useState(false);
   const [isResending, setIsResending] = useState(false);
@@ -129,13 +133,28 @@ const OtpModal = ({
   const handleResend = () => {
     if (isResending || resendIn > 0) return;
     setIsResending(true);
-    setTimeout(() => {
+
+    const finishResend = () => {
       setIsResending(false);
       setResendIn(60);
       setCode(Array(OTP_LENGTH).fill(''));
       focusInput(0);
-    }, 900);
+    };
+
+    if (onResend) {
+      // Let the parent handle the actual resend (e.g. call resendOtp)
+      Promise.resolve(onResend())
+        .then(finishResend)
+        .catch(() => {
+          setIsResending(false);
+        });
+      return;
+    }
+
+    // Fallback: simulate a resend delay
+    setTimeout(finishResend, 900);
   };
+
 
   const handleClose = () => {
     if (onClose) {

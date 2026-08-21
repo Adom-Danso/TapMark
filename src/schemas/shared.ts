@@ -3,6 +3,7 @@
 export type AppStackParamList = {
   Login: undefined;
   Signup: undefined;
+  ForgotPassword: undefined;
   Otp: {
     userId: string;
   };

@@ -21,6 +21,11 @@ import { useMutation } from '@tanstack/react-query';
 import { showToast } from '@/utils/notifications';
 import { saveProfileData } from '@/utils/profile';
 import { ProfileData } from '@/schemas/profile';
+import OtpModal from '@/components/OtpModal';
+import { addOneOTPCode } from '@/functions/verifications/add-one-otp-code';
+import { getOneOtpCode } from '@/functions/verifications/get-one-verification-code-by-code-and-userId';
+import { resendOtp } from '@/functions/auth/resend-otp';
+
 
 const FIELD_META = [
   { key: 'firstName', label: 'First name', keyboardType: 'default', icon: 'person-outline' },
@@ -28,6 +33,18 @@ const FIELD_META = [
   { key: 'email', label: 'Email address', keyboardType: 'email-address', icon: 'mail-outline' },
   { key: 'phone', label: 'Phone number', keyboardType: 'phone-pad', icon: 'call-outline' },
 ];
+
+// Maps the internal field key to the API field name expected by the backend.
+// The backend UpdateUser schema uses `phoneNumber` (camel alias of `phone_number`),
+// not `phone`. Sending `phone` is silently ignored by Pydantic, so the update
+// would return 200 OK without persisting.
+const FIELD_TO_API_KEY: Record<string, keyof User> = {
+  firstName: 'firstName',
+  lastName: 'lastName',
+  email: 'email',
+  phone: 'phoneNumber',
+};
+
 
 const validateField = (field, value) => {
   const text = value.trim();
@@ -60,6 +77,11 @@ const EditPersonalInfoScreen = ({ navigation }: { navigation: any }) => {
   const [draftValues, setDraftValues] = useState<ProfileData>(profileData);
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
+  const [otpModalVisible, setOtpModalVisible] = useState(false);
+  const [pendingUpdate, setPendingUpdate] = useState<{ field: string; value: string } | null>(null);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+
 
   async function updateUser(userUpdates: Partial<User>) {
     try {
@@ -134,6 +156,59 @@ const EditPersonalInfoScreen = ({ navigation }: { navigation: any }) => {
     return unsubscribe;
   }, [activeField, navigation]);
 
+  const sendOtpForUpdate = async (field: string, value: string) => {
+    setIsSendingOtp(true);
+    try {
+      const channel = field === 'email' ? 'email' : 'sms';
+      await addOneOTPCode({
+        userId: profileData.id,
+        otpType: 'contact_update',
+        should_send: true,
+        channel,
+        email: field === 'email' ? value : undefined,
+        phone: field === 'phone' ? value : undefined,
+      });
+      setPendingUpdate({ field, value });
+      setOtpModalVisible(true);
+    } catch (error: any) {
+      showToast('error', error.message || 'Failed to send verification code');
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  const handleVerifyOtp = async (code: string, onComplete: () => void) => {
+    if (!pendingUpdate) {
+      onComplete();
+      return;
+    }
+
+    setIsVerifyingOtp(true);
+    try {
+      await getOneOtpCode(code, profileData.id);
+      // OTP verified successfully — make the actual update request
+      updateUserMutation.mutate({ [FIELD_TO_API_KEY[pendingUpdate.field]]: pendingUpdate.value });
+
+      setOtpModalVisible(false);
+      setPendingUpdate(null);
+      setActiveField(null);
+      setErrors((prev) => ({ ...prev, [pendingUpdate.field]: '' }));
+    } catch (error: any) {
+      showToast('error', error.message || 'Invalid or expired verification code');
+    } finally {
+      setIsVerifyingOtp(false);
+      onComplete();
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (!pendingUpdate) {
+      return;
+    }
+    const mode = pendingUpdate.field === 'email' ? 'email' : 'sms';
+    await resendOtp({ userId: profileData.id, mode });
+  };
+
   const saveCurrentField = () => {
     if (!activeField) {
       return;
@@ -148,13 +223,23 @@ const EditPersonalInfoScreen = ({ navigation }: { navigation: any }) => {
       return;
     }
 
-    updateUserMutation.mutate({ [activeField]: candidate.trim() });
+    const trimmed = candidate.trim();
+
+    // Email and phone updates require OTP verification first
+    if (activeField === 'email' || activeField === 'phone') {
+      sendOtpForUpdate(activeField, trimmed);
+      return;
+    }
+
+    updateUserMutation.mutate({ [FIELD_TO_API_KEY[activeField]]: trimmed });
     setActiveField(null);
+
     setErrors((prev) => ({ ...prev, [activeField]: '' }));
 
     const savedLabel = FIELD_META.find((item) => item.key === activeField)?.label ?? 'Profile';
     navigation.navigate('ProfileHome', { notice: `${savedLabel} updated` });
   };
+
 
   const startEdit = (fieldKey: string) => {
     if (activeField && activeField !== fieldKey) {
@@ -282,9 +367,22 @@ const EditPersonalInfoScreen = ({ navigation }: { navigation: any }) => {
           })}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <OtpModal
+        visible={otpModalVisible}
+        onVerify={handleVerifyOtp}
+        onClose={() => {
+          setOtpModalVisible(false);
+          setPendingUpdate(null);
+        }}
+        onResend={handleResendOtp}
+        phoneNumber={pendingUpdate?.value || 'your phone'}
+        isVerifying={isVerifyingOtp}
+      />
     </View>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: {

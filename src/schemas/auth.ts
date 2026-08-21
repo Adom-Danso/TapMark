@@ -24,3 +24,10 @@ export const SignupSchema = z.object({
 });
 
 export type SignupSchemaType = z.infer<typeof SignupSchema>;
+
+
+export const ForgotPasswordSchema = z.object({
+    email: z.string().email(),
+});
+
+export type ForgotPasswordSchemaType = z.infer<typeof ForgotPasswordSchema>;

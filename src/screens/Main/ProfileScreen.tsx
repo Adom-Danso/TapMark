@@ -27,6 +27,9 @@ import { clearLocations } from '@/utils/locations';
 import { clearActiveCartId } from '@/utils/cart';
 import { clearTokens } from '@/utils/tokens';
 import { deleteOneNotificationTokens } from '@/functions/notification-tokens/delete-user-notification-tokens';
+import { initiatePasswordReset } from '@/functions/auth/initiate-password-reset';
+import { deleteOneUser } from '@/functions/users/delete-one-user';
+
 
 const ActionRow = ({ icon, title, subtitle, onPress }: { icon: string; title: string; subtitle: string; onPress: () => void }) => {
   const scale = useRef(new Animated.Value(1)).current;
@@ -127,9 +130,66 @@ const ProfileScreen = ({ navigation, route }: { navigation: any; route: any }) =
     retry: 2
   })
 
+  const changePasswordMutation = useMutation({
+    mutationKey: ["changePassword"],
+    mutationFn: async () => {
+      const response = await initiatePasswordReset(profileData.email);
+      return response;
+    },
+    onSuccess: () => {
+      showToast("success", "Check your email", "Password reset instructions have been sent to your email.")
+    },
+    onError: (error: any) => {
+      showToast("error", "Reset Failed", error.message || "An error occurred while sending the reset instructions. Please try again.")
+    }
+  })
+
+  const handleChangePassword = () => {
+    if (changePasswordMutation.isPending) {
+      return;
+    }
+    changePasswordMutation.mutate();
+  };
+
+  const deleteAccountMutation = useMutation({
+    mutationKey: ["deleteAccount"],
+    mutationFn: async () => {
+      const response = await deleteOneUser(profileData.id);
+      return response;
+    },
+    onSuccess: () => {
+      goToAuthWelcome();
+    },
+    onError: (error: any) => {
+      showToast("error", error.message || "An error occurred while deleting your account. Please try again.")
+    }
+  })
+
+  const handleDeleteAccount = () => {
+    if (deleteAccountMutation.isPending) {
+      return;
+    }
+
+    Alert.alert(
+      'Delete account',
+      'This action is permanent and cannot be undone. Your account, wallet balance, orders, and all associated data will be permanently deleted. Are you absolutely sure you want to continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete my account',
+          style: 'destructive',
+          onPress: () => {
+            deleteAccountMutation.mutate();
+          },
+        },
+      ]
+    );
+  };
+
 
 
   React.useEffect(() => {
+
     // play all animation after profile data is loaded
     if (profileData) {
       Animated.stagger(90, [
@@ -288,6 +348,12 @@ const ProfileScreen = ({ navigation, route }: { navigation: any; route: any }) =
             onPress={() => navigation.navigate('EditPersonalInfo')}
           />
           <ActionRow
+            icon="key-outline"
+            title="Change password"
+            subtitle="Send password reset instructions to your email"
+            onPress={handleChangePassword}
+          />
+          <ActionRow
             icon="card-outline"
             title="Payment methods"
             subtitle={`${paymentMethods.length} method${paymentMethods.length === 1 ? '' : 's'} added`}
@@ -306,10 +372,22 @@ const ProfileScreen = ({ navigation, route }: { navigation: any; route: any }) =
             <Text style={styles.logoutText}>{isLoggingOut ? 'Signing out...' : 'Sign out'}</Text>
           </TouchableOpacity>
         </Animated.View>
+
+        <TouchableOpacity
+          activeOpacity={0.6}
+          style={styles.deleteAccountWrap}
+          onPress={handleDeleteAccount}
+          disabled={deleteAccountMutation.isPending}
+        >
+          <Text style={styles.deleteAccountText}>
+            {deleteAccountMutation.isPending ? 'Deleting...' : 'Delete account'}
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: {
@@ -490,6 +568,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
   },
+  deleteAccountWrap: {
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  deleteAccountText: {
+    fontSize: 11,
+    fontWeight: '400',
+    color: '#B9B4B0',
+    textDecorationLine: 'underline',
+  },
 });
 
 export default ProfileScreen;
+

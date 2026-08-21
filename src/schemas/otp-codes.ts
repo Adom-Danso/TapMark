@@ -1,5 +1,6 @@
 
-export type OtpTypes = "password_reset" | "account_verification" | "pickup_verification" | "confirm_delivery"
+export type OtpTypes = "password_reset" | "account_verification" | "pickup_verification" | "confirm_delivery" | "contact_update"
+
 
 export type OTPCode = {
     id: string;
