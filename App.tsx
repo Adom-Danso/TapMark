@@ -19,6 +19,8 @@ import { useState } from 'react';
 import React from 'react';
 import { getTokens } from '@/utils/tokens';
 import CustomSplashScreen from './src/screens/Main/SplashScreen';
+import { navigationRef } from './src/navigation/navigationRef';
+
 
 const queryClient = new QueryClient();
 
@@ -78,7 +80,8 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <FavoritesProvider>
           <PaymentMethodsProvider>
-            <NavigationContainer>
+            <NavigationContainer ref={navigationRef}>
+
               <Stack.Navigator
                 initialRouteName={initialScreen}
                 screenOptions={{ headerShown: false, animation: 'slide_from_right' }}

@@ -1,6 +1,8 @@
 import axios from 'axios';
 
 import { getTokens, saveTokens } from '@/utils/tokens';
+import { handleUnauthorized } from '@/utils/logout';
+
 
 export const axiosInstance = axios.create({
     baseURL: process.env.EXPO_PUBLIC_BACKEND_URL,
@@ -29,6 +31,16 @@ axiosInstance.interceptors.request.use(async config => {
     return config;
 });
 
+// Auth endpoints that should NOT trigger a logout on 401 (legitimate auth failures)
+const AUTH_ENDPOINTS = [
+    '/auth/login',
+    '/auth/signup',
+    '/auth/verify',
+    '/auth/otp',
+    '/auth/reset-password',
+    '/auth/confirm-reset-password',
+];
+
 axiosInstance.interceptors.response.use(
     async response => {
         const authData = response.data?.authData;
@@ -38,6 +50,14 @@ axiosInstance.interceptors.response.use(
         return response;
     },
     error => {
+        if (error.response?.status === 401) {
+            const url = error.config?.url ?? '';
+            const isAuthEndpoint = AUTH_ENDPOINTS.some(endpoint => url.includes(endpoint));
+            if (!isAuthEndpoint) {
+                handleUnauthorized();
+            }
+        }
         return Promise.reject(error);
     }
 );
+

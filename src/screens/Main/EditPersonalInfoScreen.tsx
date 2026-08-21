@@ -34,6 +34,18 @@ const FIELD_META = [
   { key: 'phone', label: 'Phone number', keyboardType: 'phone-pad', icon: 'call-outline' },
 ];
 
+// Maps the internal field key to the API field name expected by the backend.
+// The backend UpdateUser schema uses `phoneNumber` (camel alias of `phone_number`),
+// not `phone`. Sending `phone` is silently ignored by Pydantic, so the update
+// would return 200 OK without persisting.
+const FIELD_TO_API_KEY: Record<string, keyof User> = {
+  firstName: 'firstName',
+  lastName: 'lastName',
+  email: 'email',
+  phone: 'phoneNumber',
+};
+
+
 const validateField = (field, value) => {
   const text = value.trim();
 
@@ -175,7 +187,8 @@ const EditPersonalInfoScreen = ({ navigation }: { navigation: any }) => {
     try {
       await getOneOtpCode(code, profileData.id);
       // OTP verified successfully — make the actual update request
-      updateUserMutation.mutate({ [pendingUpdate.field]: pendingUpdate.value });
+      updateUserMutation.mutate({ [FIELD_TO_API_KEY[pendingUpdate.field]]: pendingUpdate.value });
+
       setOtpModalVisible(false);
       setPendingUpdate(null);
       setActiveField(null);
@@ -218,8 +231,9 @@ const EditPersonalInfoScreen = ({ navigation }: { navigation: any }) => {
       return;
     }
 
-    updateUserMutation.mutate({ [activeField]: trimmed });
+    updateUserMutation.mutate({ [FIELD_TO_API_KEY[activeField]]: trimmed });
     setActiveField(null);
+
     setErrors((prev) => ({ ...prev, [activeField]: '' }));
 
     const savedLabel = FIELD_META.find((item) => item.key === activeField)?.label ?? 'Profile';
