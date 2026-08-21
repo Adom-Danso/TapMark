@@ -28,6 +28,7 @@ module.exports = {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "./plugins/withAndroidSigning",
       "expo-font",
       [
         "expo-secure-store",
