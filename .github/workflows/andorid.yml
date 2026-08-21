@@ -12,10 +12,11 @@ jobs:
     if: github.event_name == 'push' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
 
-    env:
+    env: 
       EXPO_PUBLIC_BACKEND_URL: ${{ secrets.EXPO_PUBLIC_BACKEND_URL }}
       EXPO_PUBLIC_BACKEND_WEBSOCKET_URL: ${{ secrets.EXPO_PUBLIC_BACKEND_WEBSOCKET_URL }}
       EXPO_PUBLIC_DELIVERY_FEE_PER_100_METER: ${{ secrets.EXPO_PUBLIC_DELIVERY_FEE_PER_100_METER }}
+      EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY }}
 
     steps:
       - name: Checkout of Repository
@@ -26,7 +27,6 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
   
       - name: set up node.js
         uses: actions/setup-node@v4
