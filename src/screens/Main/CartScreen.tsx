@@ -120,7 +120,7 @@ const CartScreen = () => {
   const fetchCartInvoiceQuery = useQuery({
     queryKey: ['fetchCartInvoice', activeCartId, currentLocation, cartLines],
     queryFn: fetchCartInvoice,
-    enabled: !!activeCartId && !!currentLocation
+    enabled: !!activeCartId && !!currentLocation && cartLines.length > 0
   });
   React.useEffect(() => {
     if (fetchCartInvoiceQuery.data && fetchCartInvoiceQuery.status == "success") {

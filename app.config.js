@@ -22,13 +22,15 @@ module.exports = {
         "backgroundColor": "#801718"
       },
       "googleServicesFile": "./google-services.json",
-      "package": "com.TapMark.regular"
+      "package": "com.TapMark.regular",
+      "versionCode": 2,
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "./plugins/withAndroidSigning",
+      "@react-native-community/datetimepicker",
       "expo-font",
       [
         "expo-secure-store",

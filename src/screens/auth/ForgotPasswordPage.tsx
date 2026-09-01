@@ -3,7 +3,6 @@ import {
 	View,
 	Text,
 	StyleSheet,
-	SafeAreaView,
 	StatusBar,
 	TextInput,
 	TouchableOpacity,
@@ -12,7 +11,8 @@ import {
 	ActivityIndicator,
 	ScrollView,
 } from 'react-native';
-import { Controller, useForm } from 'react-hook-form';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Controller, FieldErrors, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from './authTheme';
@@ -25,6 +25,7 @@ import { AppStackParamList } from '@/schemas/shared';
 type ForgotPasswordProps = NativeStackScreenProps<AppStackParamList, 'ForgotPassword'>;
 
 const ForgotPasswordPage = ({ navigation }: ForgotPasswordProps) => {
+	const insets = useSafeAreaInsets();
 	const [emailSent, setEmailSent] = useState<string | null>(null);
 	const form = useForm<ForgotPasswordSchemaType>({
 		resolver: zodResolver(ForgotPasswordSchema),
@@ -38,30 +39,43 @@ const ForgotPasswordPage = ({ navigation }: ForgotPasswordProps) => {
 			showToast("error", "Reset Failed", err.message || "An error occurred while sending the reset instructions. Please try again.")
 		}
 	};
+	const submitReset = form.handleSubmit(handleSubmitEmail, (errors: FieldErrors<ForgotPasswordSchemaType>) => {
+		if (errors.email) {
+			showToast("error", "Invalid Email", errors.email.message || "Please enter a valid email address.")
+		}
+	});
 
 	if (emailSent) {
 		return (
 			<SafeAreaView style={styles.safeArea}>
 				<StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
-				<View style={styles.confirmWrap}>
-					<View style={styles.card}>
-						<View style={styles.checkCircle}>
-							<Text style={styles.checkMark}>✓</Text>
+				<KeyboardAvoidingView
+					style={styles.container}
+					behavior={Platform.select({ ios: 'padding', android: undefined })}
+				>
+					<ScrollView
+						contentContainerStyle={[styles.confirmWrap, { paddingBottom: insets.bottom + AUTH_SPACING.screenY }]}
+						keyboardShouldPersistTaps="handled"
+					>
+						<View style={styles.card}>
+							<View style={styles.checkCircle}>
+								<Text style={styles.checkMark}>✓</Text>
+							</View>
+							<Text style={styles.title}>Check your email</Text>
+							<Text style={styles.subtitle}>
+								We've sent instructions to reset your password to
+							</Text>
+							<Text style={styles.email}>{emailSent}</Text>
+							<TouchableOpacity
+								style={styles.primaryButton}
+								onPress={() => navigation.navigate('Login')}
+								activeOpacity={0.9}
+							>
+								<Text style={styles.primaryButtonText}>Back to Login</Text>
+							</TouchableOpacity>
 						</View>
-						<Text style={styles.title}>Check your email</Text>
-						<Text style={styles.subtitle}>
-							We've sent instructions to reset your password to
-						</Text>
-						<Text style={styles.email}>{emailSent}</Text>
-						<TouchableOpacity
-							style={styles.primaryButton}
-							onPress={() => navigation.navigate('Login')}
-							activeOpacity={0.9}
-						>
-							<Text style={styles.primaryButtonText}>Back to Login</Text>
-						</TouchableOpacity>
-					</View>
-				</View>
+					</ScrollView>
+				</KeyboardAvoidingView>
 			</SafeAreaView>
 		);
 	}
@@ -70,10 +84,13 @@ const ForgotPasswordPage = ({ navigation }: ForgotPasswordProps) => {
 		<SafeAreaView style={styles.safeArea}>
 			<StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
 			<KeyboardAvoidingView
-				style={styles.safeArea}
+					style={styles.container}
 				behavior={Platform.select({ ios: 'padding', android: undefined })}
 			>
-				<ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+					<ScrollView
+						contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + AUTH_SPACING.screenY }]}
+						keyboardShouldPersistTaps="handled"
+					>
 					<View style={styles.card}>
 						<Text style={styles.title}>Forgot Password</Text>
 						<Text style={styles.subtitle}>
@@ -91,6 +108,8 @@ const ForgotPasswordPage = ({ navigation }: ForgotPasswordProps) => {
 									placeholderTextColor={AUTH_COLORS.muted}
 									keyboardType="email-address"
 									autoCapitalize="none"
+										returnKeyType="done"
+										onSubmitEditing={submitReset}
 									onBlur={onBlur}
 									onChangeText={onChange}
 									value={value}
@@ -100,11 +119,7 @@ const ForgotPasswordPage = ({ navigation }: ForgotPasswordProps) => {
 
 						<TouchableOpacity
 							style={[styles.primaryButton, form.formState.isSubmitting && styles.buttonDisabled]}
-							onPress={form.handleSubmit(handleSubmitEmail, (errors) => {
-								if (errors.email) {
-									showToast("error", "Invalid Email", errors.email.message || "Please enter a valid email address.")
-								}
-							})}
+							onPress={submitReset}
 							activeOpacity={0.9}
 						>
 							{form.formState.isSubmitting ? (
@@ -138,8 +153,8 @@ const styles = StyleSheet.create({
 		paddingTop: AUTH_SPACING.screenY,
 		paddingBottom: 32,
 		flexGrow: 1,
-		justifyContent: 'center',
 	},
+
 	card: {
 		backgroundColor: AUTH_COLORS.card,
 		borderRadius: AUTH_RADII.card,
@@ -204,8 +219,11 @@ const styles = StyleSheet.create({
 		flex: 1,
 		paddingHorizontal: AUTH_SPACING.screenX,
 		paddingTop: AUTH_SPACING.screenY,
-		paddingBottom: 32,
+		flexGrow: 1,
 		justifyContent: 'center',
+	},
+	container: {
+		flex: 1,
 	},
 	checkCircle: {
 		width: 56,
