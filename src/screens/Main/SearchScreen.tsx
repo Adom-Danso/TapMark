@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Image, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AUTH_COLORS, AUTH_SPACING } from '../auth/authTheme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSearch } from '@/context/SearchContext';
 import { searchStoreCategories } from '@/functions/store-categories/search-store-categories';
 import { useQuery } from '@tanstack/react-query';
@@ -13,6 +14,7 @@ const CATEGORY_SWATCHES = ['#FFF1E6', '#EEF8F0', '#F2F0FF', '#FFF7DD', '#EAF5FF'
 const getCategorySwatch = (index: number) => CATEGORY_SWATCHES[index % CATEGORY_SWATCHES.length];
 
 const SearchScreen = ({ navigation, route }: { navigation: any; route: any }) => {
+  const insets = useSafeAreaInsets();
   const { getSearchData, addSearchData } = useSearch();
   const { isSearchFocused } = route.params || {};
   const searchInputRef = useRef<TextInput>(null);
@@ -68,7 +70,10 @@ const SearchScreen = ({ navigation, route }: { navigation: any; route: any }) =>
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + AUTH_SPACING.screenY }]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.heroCard}>
           <View style={styles.heroTopRow}>
             <View style={styles.heroIconWrap}>
@@ -206,7 +211,6 @@ const styles = StyleSheet.create({
   },
   scroll: {
     paddingHorizontal: AUTH_SPACING.screenX,
-    paddingTop: AUTH_SPACING.screenY,
     paddingBottom: 120,
     gap: 18,
   },

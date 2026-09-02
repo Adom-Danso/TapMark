@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AUTH_COLORS, AUTH_SPACING } from '../auth/authTheme';
 import { useFavorites } from '../../context/FavoritesContext';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -18,6 +19,7 @@ type StoreDetailsScreenProps = NativeStackScreenProps<MainTabParamList, 'StoreDe
 
 
 const StoreDetailsScreen = ({ route, navigation }: StoreDetailsScreenProps) => {
+  const insets = useSafeAreaInsets();
   const { id, name = 'Store Details', imageUri, rating = 0, isOpen = true, averageRating = 0, ratingCount = 0, estimatedDeliveryFee = 0 } = route.params || {};
   const [store, setStore] = useState<Store | null>(null);
   const [storeItems, setStoreItems] = useState<StoreItem[]>([]);
@@ -181,6 +183,11 @@ const StoreDetailsScreen = ({ route, navigation }: StoreDetailsScreenProps) => {
 
   return (
     <View style={styles.container}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <Pressable style={styles.backButton} onPress={() => navigation.goBack()} hitSlop={10}>
+          <Ionicons name="chevron-back" size={22} color={AUTH_COLORS.text} />
+        </Pressable>
+      </View>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
         <View style={styles.imageWrap}>
@@ -330,6 +337,30 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: AUTH_COLORS.background,
+  },
+  header: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: AUTH_SPACING.screenX,
+    paddingBottom: 12,
+    zIndex: 10,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: AUTH_COLORS.card,
+    shadowColor: AUTH_COLORS.shadow,
+    shadowOpacity: 1,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   scrollContent: {
     paddingHorizontal: AUTH_SPACING.screenX,

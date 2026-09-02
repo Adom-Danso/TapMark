@@ -1,4 +1,4 @@
-import React, { useCallback, useLayoutEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from '../auth/authTheme';
 import StoreCard from '../../components/StoreCard';
 import { useFavorites } from '../../context/FavoritesContext';
@@ -53,6 +54,7 @@ const CATEGORY_OPTIONS = [
 ];
 
 const SectionListScreen = ({ navigation, route }: { navigation: any; route: any }) => {
+  const insets = useSafeAreaInsets();
   const routeParams = route?.params || {};
   const title = routeParams.title || 'Section';
   const { toggleFavoriteStore, isFavoriteStore } = useFavorites();
@@ -133,17 +135,6 @@ const SectionListScreen = ({ navigation, route }: { navigation: any; route: any 
     setDraftCategories(selectedCategories);
     setIsFilterOpen(true);
   }, [selectedSort, selectedRating, selectedDistance, selectedCategories]);
-
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      title,
-      headerRight: () => (
-        <Pressable onPress={handleOpenFilters} hitSlop={10} style={styles.filterButton}>
-          <Ionicons name="options-outline" size={20} color={AUTH_COLORS.primary} />
-        </Pressable>
-      ),
-    });
-  }, [navigation, title, handleOpenFilters]);
 
   const buildSearchParams = () => {
     let sortBy = baseParams.sortBy;
@@ -291,8 +282,17 @@ const SectionListScreen = ({ navigation, route }: { navigation: any; route: any 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <Pressable style={styles.backButton} onPress={() => navigation.goBack()} hitSlop={10}>
+          <Ionicons name="chevron-back" size={22} color={AUTH_COLORS.text} />
+        </Pressable>
+        <Text style={styles.headerTitle} numberOfLines={1}>{title}</Text>
+        <Pressable onPress={handleOpenFilters} hitSlop={10} style={styles.filterButton}>
+          <Ionicons name="options-outline" size={20} color={AUTH_COLORS.primary} />
+        </Pressable>
+      </View>
       {isLoading ? (
-        <View style={styles.loadingWrap}>
+        <View style={[styles.loadingWrap, { paddingTop: insets.top + 60 }]}>
           <ActivityIndicator size="small" color={AUTH_COLORS.primary} />
           <Text style={styles.loadingText}>Loading stores...</Text>
         </View>
@@ -308,7 +308,7 @@ const SectionListScreen = ({ navigation, route }: { navigation: any; route: any 
           data={stores}
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingTop: insets.top + 72 }]}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -461,6 +461,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: AUTH_COLORS.primarySoft,
+  },
+  header: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: AUTH_SPACING.screenX,
+    paddingBottom: 12,
+    zIndex: 10,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: AUTH_COLORS.card,
+    shadowColor: AUTH_COLORS.shadow,
+    shadowOpacity: 1,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '700',
+    color: AUTH_COLORS.text,
   },
   loadingWrap: {
     paddingVertical: 12,

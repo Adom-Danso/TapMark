@@ -3,6 +3,7 @@ import { Animated, FlatList, StatusBar, StyleSheet, Text, View } from 'react-nat
 import { Ionicons } from '@expo/vector-icons';
 
 import { AUTH_COLORS, AUTH_SPACING } from '../auth/authTheme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import StoreCard from '../../components/StoreCard';
 import { useFavorites } from '../../context/FavoritesContext';
 import { searchStores } from '@/functions/stores/search-stores';
@@ -14,6 +15,7 @@ import { generateImageUrl, getGpsDistanceInMeters } from '@/utils/shared';
 import { useLocation } from '@/context/LocationContext';
 
 const FavoritesScreen = ({ navigation }: { navigation: any }) => {
+  const insets = useSafeAreaInsets();
   const { favoriteStores, toggleFavoriteStore, isFavoriteStore } = useFavorites();
   const { currentLocation } = useLocation();
   const favoritesCount = favoriteStores.length;
@@ -119,7 +121,7 @@ const FavoritesScreen = ({ navigation }: { navigation: any }) => {
     return (
       <View style={styles.emptyContainer}>
         <StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
-        <View style={styles.emptyHeader}>
+        <View style={[styles.emptyHeader, { paddingTop: insets.top + 16 }]}>
           <Text style={styles.headerTitle}>Favourites</Text>
           <Text style={styles.headerSubtitle}>Saved stores you can reopen anytime.</Text>
         </View>
@@ -153,7 +155,7 @@ const FavoritesScreen = ({ navigation }: { navigation: any }) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
-      <View style={styles.headerWrap}>
+      <View style={[styles.headerWrap, { paddingTop: insets.top + 16 }]}>
         <View>
           <Text style={styles.headerTitle}>Favourites</Text>
           <Text style={styles.headerSubtitle}>Saved stores you can reopen anytime.</Text>

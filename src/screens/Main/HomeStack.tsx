@@ -13,8 +13,8 @@ const HomeStack = () => {
   return (
     <Stack.Navigator screenOptions={{ animation: 'slide_from_right' }}>
       <Stack.Screen name="HomeIndex" component={HomeScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="SectionList" component={SectionListScreen} options={{ title: 'Section' }} />
-      <Stack.Screen name="StoreDetails" component={StoreDetailsScreen} options={{ title: 'Store' }} />
+      <Stack.Screen name="SectionList" component={SectionListScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="StoreDetails" component={StoreDetailsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ItemDetails" component={ItemDetailsScreen} options={{ title: 'Item' }} />
       <Stack.Screen
         name="MapPicker"

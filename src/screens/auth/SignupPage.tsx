@@ -12,9 +12,12 @@ import {
 	ActivityIndicator,
 	ScrollView,
 	Modal,
+	LayoutAnimation,
+	UIManager,
 } from 'react-native';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from './authTheme';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod/dist/zod.js';
@@ -29,8 +32,44 @@ import { AppStackParamList } from '@/schemas/shared';
 
 type SignUpProps = NativeStackScreenProps<AppStackParamList, 'Signup'>;
 
+const STEPS = [
+	{
+		id: 0,
+		index: '01',
+		label: 'Personal',
+		title: 'Personal details',
+		description: 'Start with your name and date of birth.',
+	},
+	{
+		id: 1,
+		index: '02',
+		label: 'Campus',
+		title: 'Campus & contact',
+		description: 'Choose your campus and preferred contact info.',
+	},
+	{
+		id: 2,
+		index: '03',
+		label: 'Security',
+		title: 'Security',
+		description: 'Set your account sign-in details.',
+	},
+];
+
+const STEP_FIELDS: Record<number, Array<keyof SignupSchemaInput>> = {
+	0: ['firstName', 'lastName', 'dob'],
+	1: ['campusId', 'email', 'phoneNumber'],
+	2: ['gender', 'password', 'confirmPassword'],
+};
+
+if (Platform.OS === 'android') {
+	(UIManager as any).setLayoutAnimationEnabledExperimental?.(true);
+}
+
 const SignupPage = ({ navigation }: SignUpProps) => {
 	const insets = useSafeAreaInsets();
+	const [currentStep, setCurrentStep] = useState(0);
+	const scrollRef = useRef<ScrollView | null>(null);
 	const firstNameRef = useRef<TextInput | null>(null);
 	const lastNameRef = useRef<TextInput | null>(null);
 	const emailRef = useRef<TextInput | null>(null);
@@ -70,11 +109,28 @@ const SignupPage = ({ navigation }: SignUpProps) => {
 	const genderOptions = ['Male', 'Female'];
 	const authHighlights = ['Quick setup', 'Campus verified', 'Secure OTP'];
 
+	const stepFocusRefs: Record<number, React.RefObject<TextInput | null>> = {
+		0: firstNameRef,
+		1: emailRef,
+		2: passwordRef,
+	};
+
 	useEffect(() => {
 		if (form.formState.errors.confirmPassword && password && confirmPassword && password === confirmPassword) {
 			form.clearErrors('confirmPassword');
 		}
 	}, [confirmPassword, form, password]);
+
+	useEffect(() => {
+		const input = stepFocusRefs[currentStep]?.current;
+		if (!input) return;
+		const timer = setTimeout(() => input.focus(), 250);
+		return () => clearTimeout(timer);
+	}, [currentStep]);
+
+	useEffect(() => {
+		scrollRef.current?.scrollTo({ y: 0, animated: false });
+	}, [currentStep]);
 
 	const handleSignup = async (formData: SignupSchemaType) => {
 		try {
@@ -96,6 +152,34 @@ const SignupPage = ({ navigation }: SignUpProps) => {
 
 		await handleSignup(formData);
 	});
+
+	const animateStep = () => {
+		LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+	};
+
+	const goToStep = (step: number) => {
+		if (step === currentStep) return;
+		animateStep();
+		setCurrentStep(step);
+	};
+
+	const goNext = async () => {
+		if (currentStep === STEPS.length - 1) {
+			await submitSignup();
+			return;
+		}
+		const valid = await form.trigger(STEP_FIELDS[currentStep]);
+		if (!valid) return;
+		goToStep(currentStep + 1);
+	};
+
+	const goBack = () => {
+		if (currentStep === 0) {
+			navigation.goBack();
+			return;
+		}
+		goToStep(currentStep - 1);
+	};
 
 	async function fetchCampuses() {
 		try {
@@ -162,8 +246,7 @@ const SignupPage = ({ navigation }: SignUpProps) => {
 						form.setValue('dob', toIsoDate(selectedDate), { shouldValidate: true });
 					}
 				},
-			},
-			);
+			});
 		} else {
 			setDobOpen(true);
 		}
@@ -185,9 +268,30 @@ const SignupPage = ({ navigation }: SignUpProps) => {
 					behavior={Platform.select({ ios: 'padding', android: undefined })}
 				>
 					<ScrollView
+						ref={scrollRef}
 						contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + AUTH_SPACING.screenY }]}
 						keyboardShouldPersistTaps="handled"
+						keyboardDismissMode="on-drag"
 					>
+						<View style={styles.topBar}>
+							{currentStep > 0 ? (
+								<TouchableOpacity
+									style={styles.topBackButton}
+									onPress={goBack}
+									hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+									activeOpacity={0.7}
+								>
+									<Ionicons name="chevron-back" size={22} color={AUTH_COLORS.text} />
+								</TouchableOpacity>
+							) : (
+								<View style={styles.topSpacer} />
+							)}
+							<Text style={styles.stepCounter}>
+								Step {currentStep + 1} of {STEPS.length}
+							</Text>
+							<View style={styles.topSpacer} />
+						</View>
+
 						<View style={styles.heroWrap}>
 							<Image
 								source={require('../../../assets/auth-logo.png')}
@@ -220,247 +324,298 @@ const SignupPage = ({ navigation }: SignUpProps) => {
 								</TouchableOpacity>
 							</View>
 
-							<View style={styles.sectionHeader}>
-								<Text style={styles.sectionIndex}>01</Text>
-								<View style={styles.sectionCopy}>
-									<Text style={styles.sectionTitle}>Personal details</Text>
-									<Text style={styles.sectionDescription}>Start with your name and date of birth.</Text>
-								</View>
-							</View>
-
-							<View style={styles.row}>
-								<View style={styles.col}>
-									<Text style={styles.label}>First Name</Text>
-									<Controller
-										control={form.control}
-										name="firstName"
-										render={(params: any) => {
-											const { field } = params;
-											return (
-											<View>
-												<TextInput
-													ref={firstNameRef}
-													style={[styles.input, form.formState.errors.firstName && styles.inputError]}
-													placeholder="First"
-													placeholderTextColor={AUTH_COLORS.muted}
-													returnKeyType="next"
-													onSubmitEditing={() => lastNameRef.current?.focus()}
-													onBlur={field.onBlur}
-													onChangeText={field.onChange}
-													value={field.value}
-												/>
-												{renderMessage(form.formState.errors.firstName?.message)}
-											</View>
-										);
-									}}
-									/>
-								</View>
-
-								<View style={styles.col}>
-									<Text style={styles.label}>Last Name</Text>
-									<Controller
-										control={form.control}
-										name="lastName"
-										render={(params: any) => {
-											const { field } = params;
-											return (
-											<View>
-												<TextInput
-													ref={lastNameRef}
-													style={[styles.input, form.formState.errors.lastName && styles.inputError]}
-													placeholder="Last"
-													placeholderTextColor={AUTH_COLORS.muted}
-													returnKeyType="done"
-													onSubmitEditing={() => setCampusOpen(true)}
-													onBlur={field.onBlur}
-													onChangeText={field.onChange}
-													value={field.value}
-												/>
-												{renderMessage(form.formState.errors.lastName?.message)}
-											</View>
-										);
-									}}
-									/>
-								</View>
-							</View>
-
-							<Text style={styles.label}>Date of Birth</Text>
-							<TouchableOpacity
-								style={[styles.selectInput, form.formState.errors.dob && styles.inputError]}
-								onPress={openDobPicker}
-								activeOpacity={0.8}
-							>
-								<Text style={dob ? styles.selectText : styles.selectPlaceholder}>
-									{dob ? formatDob(dob) : 'Select your date of birth'}
-								</Text>
-							</TouchableOpacity>
-							{renderMessage(form.formState.errors.dob?.message)}
-
-							<View style={styles.sectionHeader}>
-								<Text style={styles.sectionIndex}>02</Text>
-								<View style={styles.sectionCopy}>
-									<Text style={styles.sectionTitle}>Campus & contact</Text>
-									<Text style={styles.sectionDescription}>Choose your campus and preferred contact info.</Text>
-								</View>
-							</View>
-
-							<Text style={styles.label}>University Campus</Text>
-							<TouchableOpacity
-								style={[styles.selectInput, form.formState.errors.campusId && styles.inputError]}
-								onPress={() => setCampusOpen(true)}
-								activeOpacity={0.8}
-							>
-								<Text style={campus ? styles.selectText : styles.selectPlaceholder}>
-									{selectedCampus?.name || (fetchCampusesQuery.isLoading ? 'Loading campuses...' : 'Select campus')}
-								</Text>
-							</TouchableOpacity>
-							{renderMessage(form.formState.errors.campusId?.message)}
-
-							<Text style={styles.label}>Email address</Text>
-							<Controller
-								control={form.control}
-								name="email"
-								render={(params: any) => {
-									const { field } = params;
+							<View style={styles.stepper}>
+								{STEPS.map((step, index) => {
+									const isDone = currentStep > step.id;
+									const isCurrent = currentStep === step.id;
 									return (
-									<View>
-										<TextInput
-											ref={emailRef}
-											style={[styles.input, form.formState.errors.email && styles.inputError]}
-											placeholder="student@campus.edu"
-											placeholderTextColor={AUTH_COLORS.muted}
-											keyboardType="email-address"
-											autoCapitalize="none"
-											returnKeyType="next"
-											onSubmitEditing={() => phoneRef.current?.focus()}
-											onBlur={field.onBlur}
-											onChangeText={field.onChange}
-											value={field.value}
-										/>
-										{renderMessage(form.formState.errors.email?.message)}
-									</View>
-								)}}
-							/>
+										<React.Fragment key={step.id}>
+											{index > 0 && (
+												<View
+													style={[
+														styles.stepperLine,
+														currentStep >= step.id && styles.stepperLineDone,
+													]}
+												/>
+											)}
+											<TouchableOpacity
+												style={styles.stepperItem}
+												onPress={() => goToStep(step.id)}
+												disabled={!isDone}
+												activeOpacity={0.7}
+											>
+												<View
+													style={[
+														styles.stepperDot,
+														isDone && styles.stepperDotDone,
+														isCurrent && styles.stepperDotCurrent,
+													]}
+												>
+													{isDone ? (
+														<Ionicons name="checkmark" size={13} color="#fff" />
+													) : (
+														<Text style={[styles.stepperDotText, isCurrent && styles.stepperDotTextCurrent]}>
+															{step.id + 1}
+														</Text>
+													)}
+												</View>
+												<Text style={[styles.stepperLabel, (isCurrent || isDone) && styles.stepperLabelActive]}>
+													{step.label}
+												</Text>
+											</TouchableOpacity>
+										</React.Fragment>
+									);
+								})}
+							</View>
 
-							<Text style={styles.label}>Phone</Text>
-							<Controller
-								control={form.control}
-								name="phoneNumber"
-								render={({ field }: any) => (
-									<View>
-										<TextInput
-											ref={phoneRef}
-											style={[styles.input, form.formState.errors.phoneNumber && styles.inputError]}
-											placeholder="+233 000 000 000"
-											placeholderTextColor={AUTH_COLORS.muted}
-											keyboardType="phone-pad"
-											returnKeyType="next"
-											onSubmitEditing={() => passwordRef.current?.focus()}
-											onBlur={field.onBlur}
-											onChangeText={field.onChange}
-											value={field.value}
-										/>
-										{renderMessage(form.formState.errors.phoneNumber?.message)}
+							<View key={currentStep}>
+								<View style={styles.sectionHeader}>
+									<Text style={styles.sectionIndex}>{STEPS[currentStep].index}</Text>
+									<View style={styles.sectionCopy}>
+										<Text style={styles.sectionTitle}>{STEPS[currentStep].title}</Text>
+										<Text style={styles.sectionDescription}>{STEPS[currentStep].description}</Text>
 									</View>
-								)}
-							/>
-
-							<View style={styles.sectionHeader}>
-								<Text style={styles.sectionIndex}>03</Text>
-								<View style={styles.sectionCopy}>
-									<Text style={styles.sectionTitle}>Security</Text>
-									<Text style={styles.sectionDescription}>Set your account sign-in details.</Text>
 								</View>
-							</View>
 
-							<Text style={styles.label}>Gender</Text>
-							<View style={styles.genderRow}>
-								{genderOptions.map((option) => (
-									<TouchableOpacity
-										key={option}
-										style={[
-											styles.genderButton,
-											gender === option.toLowerCase() && styles.genderButtonActive,
-										]}
-										onPress={() => form.setValue('gender', option.toLowerCase())}
-									>
-										<Text
-											style={[
-												styles.genderText,
-												gender === option.toLowerCase() && styles.genderTextActive,
-											]}
+								{currentStep === 0 && (
+									<>
+										<View style={styles.row}>
+											<View style={styles.col}>
+												<Text style={styles.label}>First Name</Text>
+												<Controller
+													control={form.control}
+													name="firstName"
+													render={(params: any) => {
+														const { field } = params;
+														return (
+															<View>
+																<TextInput
+																	ref={firstNameRef}
+																	style={[styles.input, form.formState.errors.firstName && styles.inputError]}
+																	placeholder="First"
+																	placeholderTextColor={AUTH_COLORS.muted}
+																	returnKeyType="next"
+																	onSubmitEditing={() => lastNameRef.current?.focus()}
+																	onBlur={field.onBlur}
+																	onChangeText={field.onChange}
+																	value={field.value}
+																/>
+																{renderMessage(form.formState.errors.firstName?.message)}
+															</View>
+														);
+													}}
+												/>
+											</View>
+
+											<View style={styles.col}>
+												<Text style={styles.label}>Last Name</Text>
+												<Controller
+													control={form.control}
+													name="lastName"
+													render={(params: any) => {
+														const { field } = params;
+														return (
+															<View>
+																<TextInput
+																	ref={lastNameRef}
+																	style={[styles.input, form.formState.errors.lastName && styles.inputError]}
+																	placeholder="Last"
+																	placeholderTextColor={AUTH_COLORS.muted}
+																	returnKeyType="done"
+																	onBlur={field.onBlur}
+																	onChangeText={field.onChange}
+																	value={field.value}
+																/>
+																{renderMessage(form.formState.errors.lastName?.message)}
+															</View>
+														);
+													}}
+												/>
+											</View>
+										</View>
+
+										<Text style={styles.label}>Date of Birth</Text>
+										<TouchableOpacity
+											style={[styles.selectInput, form.formState.errors.dob && styles.inputError]}
+											onPress={openDobPicker}
+											activeOpacity={0.8}
 										>
-											{option}
-										</Text>
-									</TouchableOpacity>
-								))}
-							</View>
-
-							<Text style={styles.label}>Password</Text>
-							<Controller
-								control={form.control}
-								name="password"
-								render={({ field }: any) => (
-									<View>
-										<TextInput
-											ref={passwordRef}
-											style={[styles.input, form.formState.errors.password && styles.inputError]}
-											placeholder="Create password"
-											placeholderTextColor={AUTH_COLORS.muted}
-											secureTextEntry
-											returnKeyType="next"
-											onSubmitEditing={() => confirmPasswordRef.current?.focus()}
-											onBlur={field.onBlur}
-											onChangeText={field.onChange}
-											value={field.value}
-										/>
-										{renderMessage(form.formState.errors.password?.message)}
-									</View>
+											<Text style={dob ? styles.selectText : styles.selectPlaceholder}>
+												{dob ? formatDob(dob) : 'Select your date of birth'}
+											</Text>
+										</TouchableOpacity>
+										{renderMessage(form.formState.errors.dob?.message)}
+									</>
 								)}
-							/>
 
-							<Text style={styles.label}>Confirm Password</Text>
-							<Controller
-								control={form.control}
-								name="confirmPassword"
-								render={({ field }: any) => (
-									<View>
-										<TextInput
-											ref={confirmPasswordRef}
-											style={[styles.input, form.formState.errors.confirmPassword && styles.inputError]}
-											placeholder="Re-enter password"
-											placeholderTextColor={AUTH_COLORS.muted}
-											secureTextEntry
-											returnKeyType="done"
-											onSubmitEditing={submitSignup}
-											onBlur={field.onBlur}
-											onChangeText={field.onChange}
-											value={field.value}
+								{currentStep === 1 && (
+									<>
+										<Text style={styles.label}>University Campus</Text>
+										<TouchableOpacity
+											style={[styles.selectInput, form.formState.errors.campusId && styles.inputError]}
+											onPress={() => setCampusOpen(true)}
+											activeOpacity={0.8}
+										>
+											<Text style={campus ? styles.selectText : styles.selectPlaceholder}>
+												{selectedCampus?.name || (fetchCampusesQuery.isLoading ? 'Loading campuses...' : 'Select campus')}
+											</Text>
+										</TouchableOpacity>
+										{renderMessage(form.formState.errors.campusId?.message)}
+
+										<Text style={styles.label}>Email address</Text>
+										<Controller
+											control={form.control}
+											name="email"
+											render={(params: any) => {
+												const { field } = params;
+												return (
+													<View>
+														<TextInput
+															ref={emailRef}
+															style={[styles.input, form.formState.errors.email && styles.inputError]}
+															placeholder="student@campus.edu"
+															placeholderTextColor={AUTH_COLORS.muted}
+															keyboardType="email-address"
+															autoCapitalize="none"
+															returnKeyType="next"
+															onSubmitEditing={() => phoneRef.current?.focus()}
+															onBlur={field.onBlur}
+															onChangeText={field.onChange}
+															value={field.value}
+														/>
+														{renderMessage(form.formState.errors.email?.message)}
+													</View>
+												);
+											}}
 										/>
-										{form.formState.errors.confirmPassword ? (
-											<Text style={styles.fieldError}>{form.formState.errors.confirmPassword.message}</Text>
+
+										<Text style={styles.label}>Phone</Text>
+										<Controller
+											control={form.control}
+											name="phoneNumber"
+											render={({ field }: any) => (
+												<View>
+													<TextInput
+														ref={phoneRef}
+														style={[styles.input, form.formState.errors.phoneNumber && styles.inputError]}
+														placeholder="+233 000 000 000"
+														placeholderTextColor={AUTH_COLORS.muted}
+														keyboardType="phone-pad"
+														returnKeyType="next"
+														onSubmitEditing={() => goNext()}
+														onBlur={field.onBlur}
+														onChangeText={field.onChange}
+														value={field.value}
+													/>
+													{renderMessage(form.formState.errors.phoneNumber?.message)}
+												</View>
+											)}
+										/>
+									</>
+								)}
+
+								{currentStep === 2 && (
+									<>
+										<Text style={styles.label}>Gender</Text>
+										<View style={styles.genderRow}>
+											{genderOptions.map((option) => (
+												<TouchableOpacity
+													key={option}
+													style={[
+														styles.genderButton,
+														gender === option.toLowerCase() && styles.genderButtonActive,
+													]}
+													onPress={() => form.setValue('gender', option.toLowerCase())}
+												>
+													<Text
+														style={[
+															styles.genderText,
+															gender === option.toLowerCase() && styles.genderTextActive,
+														]}
+													>
+														{option}
+													</Text>
+												</TouchableOpacity>
+											))}
+										</View>
+
+										<Text style={styles.label}>Password</Text>
+										<Controller
+											control={form.control}
+											name="password"
+											render={({ field }: any) => (
+												<View>
+													<TextInput
+														ref={passwordRef}
+														style={[styles.input, form.formState.errors.password && styles.inputError]}
+														placeholder="Create password"
+														placeholderTextColor={AUTH_COLORS.muted}
+														secureTextEntry
+														returnKeyType="next"
+														onSubmitEditing={() => confirmPasswordRef.current?.focus()}
+														onBlur={field.onBlur}
+														onChangeText={field.onChange}
+														value={field.value}
+													/>
+													{renderMessage(form.formState.errors.password?.message)}
+												</View>
+											)}
+										/>
+
+										<Text style={styles.label}>Confirm Password</Text>
+										<Controller
+											control={form.control}
+											name="confirmPassword"
+											render={({ field }: any) => (
+												<View>
+													<TextInput
+														ref={confirmPasswordRef}
+														style={[styles.input, form.formState.errors.confirmPassword && styles.inputError]}
+														placeholder="Re-enter password"
+														placeholderTextColor={AUTH_COLORS.muted}
+														secureTextEntry
+														returnKeyType="done"
+														onSubmitEditing={() => goNext()}
+														onBlur={field.onBlur}
+														onChangeText={field.onChange}
+														value={field.value}
+													/>
+													{form.formState.errors.confirmPassword ? (
+														<Text style={styles.fieldError}>{form.formState.errors.confirmPassword.message}</Text>
+													) : (
+														<Text style={styles.helperText}>Use a password you can type quickly on your phone.</Text>
+													)}
+												</View>
+											)}
+										/>
+									</>
+								)}
+
+								<View style={styles.actionsRow}>
+									{currentStep > 0 && (
+										<TouchableOpacity style={styles.backButton} onPress={goBack} activeOpacity={0.8}>
+											<Text style={styles.backButtonText}>Back</Text>
+										</TouchableOpacity>
+									)}
+									<TouchableOpacity
+										style={[styles.primaryButton, form.formState.isSubmitting && styles.buttonDisabled]}
+										onPress={goNext}
+										activeOpacity={0.9}
+									>
+										{form.formState.isSubmitting ? (
+											<ActivityIndicator color="#fff" />
 										) : (
-											<Text style={styles.helperText}>Use a password you can type quickly on your phone.</Text>
+											<Text style={styles.primaryButtonText}>
+												{currentStep === STEPS.length - 1 ? 'Create Account' : 'Continue'}
+											</Text>
 										)}
-									</View>
-								)}
-							/>
+									</TouchableOpacity>
+								</View>
 
-							<TouchableOpacity
-								style={[styles.primaryButton, form.formState.isSubmitting && styles.buttonDisabled]}
-								onPress={submitSignup}
-								activeOpacity={0.9}
-							>
-								{form.formState.isSubmitting ? (
-									<ActivityIndicator color="#fff" />
-								) : (
-									<Text style={styles.primaryButtonText}>Sign Up</Text>
-								)}
-							</TouchableOpacity>
-
-							<Text style={styles.terms}>
-								By signing up, you agree to our Terms & Privacy Policy.
-							</Text>
+								<Text style={styles.terms}>
+									By signing up, you agree to our Terms & Privacy Policy.
+								</Text>
+							</View>
 						</View>
 					</ScrollView>
 				</KeyboardAvoidingView>
@@ -546,11 +701,34 @@ const styles = StyleSheet.create({
 		paddingTop: AUTH_SPACING.screenY,
 		flexGrow: 1,
 	},
+	topBar: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
+		marginBottom: 10,
+	},
+	topBackButton: {
+		width: 32,
+		height: 32,
+		borderRadius: 16,
+		alignItems: 'center',
+		justifyContent: 'center',
+		backgroundColor: AUTH_COLORS.card,
+	},
+	topSpacer: {
+		width: 32,
+	},
+	stepCounter: {
+		fontSize: 12,
+		fontWeight: '700',
+		letterSpacing: 0.4,
+		color: AUTH_COLORS.muted,
+	},
 	heroWrap: {
-		height: 170,
-		borderRadius: 22,
+		height: 118,
+		borderRadius: 18,
 		overflow: 'hidden',
-		marginBottom: 14,
+		marginBottom: 12,
 		backgroundColor: AUTH_COLORS.card,
 		shadowColor: AUTH_COLORS.shadow,
 		shadowOpacity: 1,
@@ -635,6 +813,60 @@ const styles = StyleSheet.create({
 		fontWeight: '600',
 	},
 	toggleTextActive: {
+		color: AUTH_COLORS.primary,
+	},
+	stepper: {
+		flexDirection: 'row',
+		alignItems: 'flex-start',
+		marginBottom: 14,
+	},
+	stepperItem: {
+		width: 76,
+		alignItems: 'center',
+	},
+	stepperDot: {
+		width: 28,
+		height: 28,
+		borderRadius: 14,
+		backgroundColor: AUTH_COLORS.line,
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
+	stepperDotCurrent: {
+		backgroundColor: AUTH_COLORS.primarySoft,
+		borderWidth: 1.5,
+		borderColor: AUTH_COLORS.primary,
+	},
+	stepperDotDone: {
+		backgroundColor: AUTH_COLORS.primary,
+	},
+	stepperDotText: {
+		fontSize: 12,
+		fontWeight: '800',
+		color: AUTH_COLORS.muted,
+	},
+	stepperDotTextCurrent: {
+		color: AUTH_COLORS.primary,
+	},
+	stepperLine: {
+		flex: 1,
+		height: 2,
+		borderRadius: 1,
+		backgroundColor: AUTH_COLORS.line,
+		marginTop: 13,
+		marginHorizontal: 5,
+	},
+	stepperLineDone: {
+		backgroundColor: AUTH_COLORS.primary,
+	},
+	stepperLabel: {
+		marginTop: 6,
+		fontSize: 10.5,
+		fontWeight: '600',
+		color: AUTH_COLORS.muted,
+		textAlign: 'center',
+	},
+	stepperLabelActive: {
 		color: AUTH_COLORS.primary,
 	},
 	sectionHeader: {
@@ -749,7 +981,27 @@ const styles = StyleSheet.create({
 	genderTextActive: {
 		color: AUTH_COLORS.primary,
 	},
+	actionsRow: {
+		flexDirection: 'row',
+		gap: 10,
+		marginTop: 6,
+	},
+	backButton: {
+		flex: 1,
+		borderWidth: 1,
+		borderColor: AUTH_COLORS.line,
+		borderRadius: AUTH_RADII.pill,
+		paddingVertical: 14,
+		alignItems: 'center',
+		backgroundColor: '#fff',
+	},
+	backButtonText: {
+		color: AUTH_COLORS.muted,
+		fontSize: 15,
+		fontWeight: '600',
+	},
 	primaryButton: {
+		flex: 1,
 		backgroundColor: AUTH_COLORS.primary,
 		borderRadius: AUTH_RADII.pill,
 		paddingVertical: 14,

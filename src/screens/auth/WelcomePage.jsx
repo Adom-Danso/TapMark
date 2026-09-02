@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   Image,
-  SafeAreaView,
   TouchableOpacity,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from './authTheme';
 
 const IMAGES = [require('../../../assets/welcome1.png'), require('../../../assets/welcome2.png')];

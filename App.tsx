@@ -1,4 +1,4 @@
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ImageBackground, StyleSheet, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -77,30 +77,28 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={{ flex: 1 }}>
-        <QueryClientProvider client={queryClient}>
-          <FavoritesProvider>
-            <PaymentMethodsProvider>
-              <NavigationContainer ref={navigationRef}>
+      <QueryClientProvider client={queryClient}>
+        <FavoritesProvider>
+          <PaymentMethodsProvider>
+            <NavigationContainer ref={navigationRef}>
 
-                <Stack.Navigator
-                  initialRouteName={initialScreen}
-                  screenOptions={{ headerShown: false, animation: 'slide_from_right' }}
-                >
-                  <Stack.Screen name="Welcome" component={WelcomePage} />
-                  <Stack.Screen name="Login" component={LoginPage} />
-                  <Stack.Screen name="Signup" component={SignupPage} />
-                  <Stack.Screen name="ForgotPassword" component={ForgotPasswordPage} />
-                  <Stack.Screen name="Otp" component={OtpPage} />
-                  <Stack.Screen name="Splash" component={CustomSplashScreen} />
-                  <Stack.Screen name="Main" component={BottomTabs} />
-                </Stack.Navigator>
-                <Toast />
-              </NavigationContainer>
-            </PaymentMethodsProvider>
-          </FavoritesProvider>
-        </QueryClientProvider>
-      </SafeAreaView>
+              <Stack.Navigator
+                initialRouteName={initialScreen}
+                screenOptions={{ headerShown: false, animation: 'slide_from_right' }}
+              >
+                <Stack.Screen name="Welcome" component={WelcomePage} />
+                <Stack.Screen name="Login" component={LoginPage} />
+                <Stack.Screen name="Signup" component={SignupPage} />
+                <Stack.Screen name="ForgotPassword" component={ForgotPasswordPage} />
+                <Stack.Screen name="Otp" component={OtpPage} />
+                <Stack.Screen name="Splash" component={CustomSplashScreen} />
+                <Stack.Screen name="Main" component={BottomTabs} />
+              </Stack.Navigator>
+              <Toast />
+            </NavigationContainer>
+          </PaymentMethodsProvider>
+        </FavoritesProvider>
+      </QueryClientProvider>
     </SafeAreaProvider>
   );
 }
