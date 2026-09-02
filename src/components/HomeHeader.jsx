@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
     left: -AUTH_SPACING.screenX,
     right: -AUTH_SPACING.screenX,
     top: 0,
-    height: 140,
+    bottom: 31,
     backgroundColor: AUTH_COLORS.primarySoft,
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,

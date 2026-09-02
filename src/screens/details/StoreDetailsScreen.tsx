@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Image, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AUTH_COLORS, AUTH_SPACING } from '../auth/authTheme';
@@ -183,12 +183,16 @@ const StoreDetailsScreen = ({ route, navigation }: StoreDetailsScreenProps) => {
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable style={styles.backButton} onPress={() => navigation.goBack()} hitSlop={10}>
           <Ionicons name="chevron-back" size={22} color={AUTH_COLORS.text} />
         </Pressable>
       </View>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 72 }]}
+        showsVerticalScrollIndicator={false}
+      >
 
         <View style={styles.imageWrap}>
           <Image source={{ uri: generateImageUrl(imageUri || '') }} style={styles.image} resizeMode="cover" />
