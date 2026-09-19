@@ -2,15 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from '../auth/authTheme';
@@ -270,14 +268,11 @@ const EditPersonalInfoScreen = ({ navigation }: { navigation: any }) => {
 
   return (
     <View style={styles.container}>
-      <KeyboardAvoidingView
+      <KeyboardAwareScrollView
         style={styles.container}
-        behavior={Platform.select({ ios: 'padding', android: undefined })}
+        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 8 }]}
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 8 }]}
-          showsVerticalScrollIndicator={false}
-        >
           <Text style={styles.title}>Edit personal info</Text>
           <Text style={styles.subtitle}>{headerSubtitle}</Text>
 
@@ -365,8 +360,7 @@ const EditPersonalInfoScreen = ({ navigation }: { navigation: any }) => {
               </View>
             );
           })}
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
 
       <OtpModal
         visible={otpModalVisible}
