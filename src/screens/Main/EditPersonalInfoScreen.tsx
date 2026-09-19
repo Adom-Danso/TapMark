@@ -272,6 +272,8 @@ const EditPersonalInfoScreen = ({ navigation }: { navigation: any }) => {
         style={styles.container}
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 8 }]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
           <Text style={styles.title}>Edit personal info</Text>
           <Text style={styles.subtitle}>{headerSubtitle}</Text>
