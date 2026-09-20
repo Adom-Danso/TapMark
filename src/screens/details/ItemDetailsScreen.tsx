@@ -24,6 +24,13 @@ import { generateImageUrl } from '@/utils/shared';
 import LoadingBackdrop from '@/components/LoadingBackdrop';
 
 const NOTE_MAX_LENGTH = 160;
+
+const FreeBadge = () => (
+  <View style={styles.freeBadge}>
+    <Text style={styles.freeBadgeText}>Free</Text>
+  </View>
+);
+
 const parseMoney = (value: unknown): number => {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : 0;
@@ -345,9 +352,15 @@ const ItemDetailsScreen = ({ route, navigation }: StoreItemDetailScreenProps) =>
                     <View>
                       <Text style={styles.optionLabel}>{extra.name}</Text>
                       {!extra.isSoldPerUnit ? (
-                        <Text style={styles.optionPrice}>
-                          Min amount GHS {parseMoney(extra.unitPrice).toFixed(2)}
-                        </Text>
+                        parseMoney(extra.unitPrice) === 0 ? (
+                          <FreeBadge />
+                        ) : (
+                          <Text style={styles.optionPrice}>
+                            Min amount GHS {parseMoney(extra.unitPrice).toFixed(2)}
+                          </Text>
+                        )
+                      ) : parseMoney(extra.unitPrice) === 0 ? (
+                        <FreeBadge />
                       ) : (
                         <Text style={styles.optionPrice}>
                           GHS {parseMoney(extra.unitPrice).toFixed(2)} per unit
@@ -384,7 +397,11 @@ const ItemDetailsScreen = ({ route, navigation }: StoreItemDetailScreenProps) =>
                       value={selectedState.amount !== undefined ? String(selectedState.amount) : ''}
                       onChangeText={(text) => updateOpenAmount(extra, text)}
                       keyboardType="decimal-pad"
-                      placeholder={`Enter amount >= ${parseMoney(extra.unitPrice).toFixed(2)}`}
+                      placeholder={
+                        parseMoney(extra.unitPrice) === 0
+                          ? 'Enter amount'
+                          : `Enter amount >= ${parseMoney(extra.unitPrice).toFixed(2)}`
+                      }
                       placeholderTextColor={AUTH_COLORS.muted}
                       style={styles.amountInput}
                     />
@@ -420,9 +437,15 @@ const ItemDetailsScreen = ({ route, navigation }: StoreItemDetailScreenProps) =>
                     <View>
                       <Text style={styles.optionLabel}>{extra.name}</Text>
                       {!extra.isSoldPerUnit ? (
-                        <Text style={styles.optionPrice}>
-                          Min amount GHS {parseMoney(extra.unitPrice).toFixed(2)}
-                        </Text>
+                        parseMoney(extra.unitPrice) === 0 ? (
+                          <FreeBadge />
+                        ) : (
+                          <Text style={styles.optionPrice}>
+                            Min amount GHS {parseMoney(extra.unitPrice).toFixed(2)}
+                          </Text>
+                        )
+                      ) : parseMoney(extra.unitPrice) === 0 ? (
+                        <FreeBadge />
                       ) : (
                         <Text style={styles.optionPrice}>
                           GHS {parseMoney(extra.unitPrice).toFixed(2)} per unit
@@ -459,7 +482,11 @@ const ItemDetailsScreen = ({ route, navigation }: StoreItemDetailScreenProps) =>
                       value={selectedState.amount !== undefined ? String(selectedState.amount) : ''}
                       onChangeText={(text) => updateOpenAmount(extra, text)}
                       keyboardType="decimal-pad"
-                      placeholder={`Enter amount >= ${parseMoney(extra.unitPrice).toFixed(2)}`}
+                      placeholder={
+                        parseMoney(extra.unitPrice) === 0
+                          ? 'Enter amount'
+                          : `Enter amount >= ${parseMoney(extra.unitPrice).toFixed(2)}`
+                      }
                       placeholderTextColor={AUTH_COLORS.muted}
                       style={styles.amountInput}
                     />
@@ -638,6 +665,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: AUTH_COLORS.muted,
     marginTop: 2,
+  },
+  freeBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: AUTH_RADII.pill,
+    backgroundColor: AUTH_COLORS.primarySoft,
+  },
+  freeBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: AUTH_COLORS.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   inlineControlRow: {
     flexDirection: 'row',
