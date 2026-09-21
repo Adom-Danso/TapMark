@@ -63,6 +63,12 @@ const PromoText = styled.Text`
 `;
 
 const StatusBadge = styled.View`
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
   padding: 6px 10px;
   border-radius: 999px;
   background-color: #1b8a3f;
@@ -74,27 +80,16 @@ const StatusText = styled.Text`
   font-weight: 600;
 `;
 
-const StatusStack = styled.View`
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  gap: 6px;
-  align-items: flex-start;
-`;
-
-const HolidayBadge = styled.View`
-  padding: 5px 9px;
-  border-radius: 999px;
-  background-color: rgba(255, 255, 255, 0.92);
-  flex-direction: row;
-  align-items: center;
-  gap: 4px;
+const StatusDivider = styled.View`
+  width: 1px;
+  height: 12px;
+  background-color: rgba(255, 255, 255, 0.5);
 `;
 
 const HolidayText = styled.Text`
-  color: ${AUTH_COLORS.primary};
-  font-size: 11px;
-  font-weight: 700;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
 `;
 
 const CardBody = styled.View`
@@ -298,17 +293,16 @@ const StoreCard = ({
           </PromoBadge>
         ) : null}
         {!isItem ? (
-          <StatusStack>
-            <StatusBadge style={{ backgroundColor: isStoreOpen ? '#1b8a3f' : '#c62828' }}>
-              <StatusText>{isStoreOpen ? 'Open' : 'Closed'}</StatusText>
-            </StatusBadge>
+          <StatusBadge style={{ backgroundColor: isStoreOpen ? '#1b8a3f' : '#c62828' }}>
+            <StatusText>{isStoreOpen ? 'Open' : 'Closed'}</StatusText>
             {isStoreOpen && isAvailableOnHolidays ? (
-              <HolidayBadge>
-                <Ionicons name="calendar-outline" size={11} color={AUTH_COLORS.primary} />
-                <HolidayText>Open on holidays</HolidayText>
-              </HolidayBadge>
+              <>
+                <StatusDivider />
+                <Ionicons name="calendar-outline" size={11} color="#fff" />
+                <HolidayText>Holidays</HolidayText>
+              </>
             ) : null}
-          </StatusStack>
+          </StatusBadge>
         ) : null}
       </ImageWrap>
       <CardBody>
