@@ -15,6 +15,10 @@ import { StoreCategories } from '@/schemas/store-categories';
 import { generateImageUrl, getGpsDistanceInMeters } from '@/utils/shared';
 import { searchStoreCategories } from '@/functions/store-categories/search-store-categories';
 import { showToast } from '@/utils/notifications';
+import { searchOrders } from '@/functions/orders/search-orders';
+import { searchTempOrders } from '@/functions/orders/search_temp_orders';
+import { useProfile } from '@/context/ProfileContext';
+import OngoingOrderCard, { OngoingOrderCardData } from '@/components/OngoingOrderCard';
 
 type Sections = "save" | "explore" | "top-rated" | "recommended";
 
@@ -36,9 +40,12 @@ const HOME_SECTIONS = [
   },
 ];
 
+const ONGOING_ORDERS_LIMIT = 5;
+
 const HomeScreen = ({ navigation }: { navigation: any }) => {
   const { currentLocation, isLoading } = useLocation();
   const { toggleFavoriteStore, isFavoriteStore } = useFavorites();
+  const { profileData } = useProfile();
   const [categories, setCategories] = useState<StoreCategories[]>([]);
   const [homeSections, setHomeSections] = useState<any[]>(HOME_SECTIONS);
 
@@ -154,6 +161,60 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
     }
   }
 
+  const ongoingTempOrdersQuery = useQuery({
+    queryKey: ['pendingRequests', 'ongoing', profileData?.id],
+    queryFn: async () => {
+      const response = await searchTempOrders(profileData?.id || null, null, true);
+      return response.data;
+    },
+    retry: 2,
+    enabled: Boolean(profileData?.id),
+  });
+
+  const ongoingOrdersQuery = useQuery({
+    queryKey: ['searchOrders', 'ongoing', profileData?.id],
+    queryFn: async () => {
+      const response = await searchOrders(10, 0, profileData?.id || null, false, null, null, null, null, null, null, null, null, null, null);
+      return response.data;
+    },
+    enabled: Boolean(profileData?.id),
+  });
+
+  const ongoingOrders = React.useMemo<OngoingOrderCardData[]>(() => {
+    const tempOrders: OngoingOrderCardData[] = (ongoingTempOrdersQuery.data || []).map((order) => ({
+      id: order.id,
+      status: 'awaiting_payment',
+      createdAt: order.createdAt,
+    }));
+
+    const paidOrders: OngoingOrderCardData[] = (ongoingOrdersQuery.data || [])
+      .filter((order) => order.orderStatus === 'processing' || order.orderStatus === 'accepted')
+      .map((order) => ({
+        id: order.id,
+        status: 'preparing',
+        total: (order.deliveryFee || 0) + (order.serviceFee || 0) + (order.payment?.amount || 0),
+        createdAt: order.createdAt,
+      }));
+
+    const sortByCreatedAtDesc = (a: OngoingOrderCardData, b: OngoingOrderCardData) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+
+    return [...tempOrders.sort(sortByCreatedAtDesc), ...paidOrders.sort(sortByCreatedAtDesc)];
+  }, [ongoingTempOrdersQuery.data, ongoingOrdersQuery.data]);
+
+  const handleOngoingOrderPress = (order: OngoingOrderCardData) => {
+    if (order.status === 'awaiting_payment') {
+      navigation.navigate('Orders', { activeTabId: 'pending' });
+      return;
+    }
+
+    navigation.navigate('Orders', { activeTabId: 'current' });
+  };
+
+  const handleSeeAllOngoingOrders = () => {
+    navigation.navigate('Orders', { activeTabId: 'current' });
+  };
+
   const handleSearchPress = () => {
     const parentNav = navigation.getParent();
     if (parentNav) {
@@ -182,6 +243,29 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
             <Text style={{ marginTop: 8, color: AUTH_COLORS.muted, fontSize: 12 }}>Acquiring current location…</Text>
           </View>
         ) : null}
+        {ongoingOrders.length > 0 && (
+          <View style={styles.ongoingSection}>
+            <View style={styles.ongoingHeaderRow}>
+              <Text style={styles.ongoingTitle}>Ongoing orders</Text>
+              <TouchableOpacity onPress={handleSeeAllOngoingOrders} hitSlop={8}>
+                <Text style={styles.ongoingActionText}>See all</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.ongoingList}
+            >
+              {ongoingOrders.slice(0, ONGOING_ORDERS_LIMIT).map((order) => (
+                <OngoingOrderCard
+                  key={order.id}
+                  data={order}
+                  onPress={() => handleOngoingOrderPress(order)}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        )}
         {categories.length > 0 && (
           <View style={styles.categorySection}>
             <CategoryStrip title="Top rated categories" categories={categories} tileSize={50} onCategoryPress={(category) => {
@@ -235,6 +319,28 @@ const styles = StyleSheet.create({
   },
   categorySection: {
     marginBottom: 8,
+  },
+  ongoingSection: {
+    gap: 12,
+  },
+  ongoingHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  ongoingTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: AUTH_COLORS.text,
+  },
+  ongoingActionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: AUTH_COLORS.primary,
+  },
+  ongoingList: {
+    gap: 12,
+    paddingRight: AUTH_SPACING.screenX,
   },
 });
 
