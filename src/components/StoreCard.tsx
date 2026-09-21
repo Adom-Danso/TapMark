@@ -6,7 +6,7 @@ import styled from 'styled-components/native';
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from '../screens/auth/authTheme';
 import { Store } from '@/schemas/stores';
 import { StoreItem } from '@/schemas/store-items';
-import { generateImageUrl } from '@/utils/shared';
+import { checkWhetherStoreOpenedToday, generateImageUrl } from '@/utils/shared';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -64,8 +64,8 @@ const PromoText = styled.Text`
 
 const StatusBadge = styled.View`
   position: absolute;
-  bottom: 10px;
-  right: 10px;
+  top: 10px;
+  left: 10px;
   padding: 6px 10px;
   border-radius: 999px;
   background-color: #1b8a3f;
@@ -168,6 +168,19 @@ const StoreCard = ({
     return data.averageRating || '0.0';
   }, [data.averageRating]);
 
+  const isStoreOpen = useMemo(() => {
+    if (isItem) {
+      return false;
+    }
+
+    const store = data as Store;
+    if (Array.isArray(store.workingHours) && store.workingHours.length > 0) {
+      return checkWhetherStoreOpenedToday(store.workingHours);
+    }
+
+    return Boolean(store.isOpen);
+  }, [data, isItem]);
+
   const handlePressIn = () => {
     Animated.spring(scale, {
       toValue: 0.98,
@@ -257,8 +270,8 @@ const StoreCard = ({
           </PromoBadge>
         ) : null}
         {!isItem ? (
-          <StatusBadge style={{ backgroundColor: (data as Store).isOpen ? '#1b8a3f' : '#c62828' }}>
-            <StatusText>{(data as Store).isOpen ? 'Open' : 'Closed'}</StatusText>
+          <StatusBadge style={{ backgroundColor: isStoreOpen ? '#1b8a3f' : '#c62828' }}>
+            <StatusText>{isStoreOpen ? 'Open' : 'Closed'}</StatusText>
           </StatusBadge>
         ) : null}
       </ImageWrap>
