@@ -63,9 +63,6 @@ const PromoText = styled.Text`
 `;
 
 const StatusBadge = styled.View`
-  position: absolute;
-  top: 10px;
-  left: 10px;
   padding: 6px 10px;
   border-radius: 999px;
   background-color: #1b8a3f;
@@ -75,6 +72,29 @@ const StatusText = styled.Text`
   color: #fff;
   font-size: 12px;
   font-weight: 600;
+`;
+
+const StatusStack = styled.View`
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  gap: 6px;
+  align-items: flex-start;
+`;
+
+const HolidayBadge = styled.View`
+  padding: 5px 9px;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.92);
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+`;
+
+const HolidayText = styled.Text`
+  color: ${AUTH_COLORS.primary};
+  font-size: 11px;
+  font-weight: 700;
 `;
 
 const CardBody = styled.View`
@@ -181,6 +201,14 @@ const StoreCard = ({
     return Boolean(store.isOpen);
   }, [data, isItem]);
 
+  const isAvailableOnHolidays = useMemo(() => {
+    if (isItem) {
+      return false;
+    }
+
+    return Boolean((data as Store).isAvailableOnHolidays);
+  }, [data, isItem]);
+
   const handlePressIn = () => {
     Animated.spring(scale, {
       toValue: 0.98,
@@ -270,9 +298,17 @@ const StoreCard = ({
           </PromoBadge>
         ) : null}
         {!isItem ? (
-          <StatusBadge style={{ backgroundColor: isStoreOpen ? '#1b8a3f' : '#c62828' }}>
-            <StatusText>{isStoreOpen ? 'Open' : 'Closed'}</StatusText>
-          </StatusBadge>
+          <StatusStack>
+            <StatusBadge style={{ backgroundColor: isStoreOpen ? '#1b8a3f' : '#c62828' }}>
+              <StatusText>{isStoreOpen ? 'Open' : 'Closed'}</StatusText>
+            </StatusBadge>
+            {isStoreOpen && isAvailableOnHolidays ? (
+              <HolidayBadge>
+                <Ionicons name="calendar-outline" size={11} color={AUTH_COLORS.primary} />
+                <HolidayText>Open on holidays</HolidayText>
+              </HolidayBadge>
+            ) : null}
+          </StatusStack>
         ) : null}
       </ImageWrap>
       <CardBody>
