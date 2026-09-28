@@ -15,16 +15,21 @@ import RequestCard from '@/components/RequestCard';
 import { searchTempOrders } from '@/functions/orders/search_temp_orders';
 import { getCartInvoice } from '@/functions/cart/get-cart-invoice';
 import LoadingBackdrop from '@/components/LoadingBackdrop';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { CartTabParamList } from '@/schemas/shared';
 
 const PAGE_SIZE = 10;
 
-const OrdersScreen = () => {
+type OrdersScreenProps = NativeStackScreenProps<CartTabParamList, 'Orders'>;
+
+
+const OrdersScreen = ({route}: OrdersScreenProps) => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { addCartLine, clearCart } = useCart();
   const { profileData } = useProfile();
-
-  const [activeTab, setActiveTab] = useState<'pending' | 'current' | 'past'>('current');
+  const {activeTabId} = route.params || {}
+  const [activeTab, setActiveTab] = useState<'pending' | 'current' | 'past'>(activeTabId === null ? 'current': activeTabId);
   const [railWidth, setRailWidth] = useState(0);
   const [orders, setOrders] = useState<Order[]>([]);
   const [skip, setSkip] = useState(0);

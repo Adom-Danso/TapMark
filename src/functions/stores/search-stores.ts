@@ -20,6 +20,8 @@ export async function searchStores(
     minimumRating: number | null = null,
     userId: string | null = null,
     campusId: string | null = null,
+    includeItems: boolean = false,
+    restrictToUserCampus: boolean = true,
 ): Promise<SuccessResponse<Store[]>> {
     try {
         const response = await axiosInstance.get('/stores', {
@@ -38,6 +40,8 @@ export async function searchStores(
                 minimum_rating: minimumRating,
                 user_id: userId,
                 campus_id: campusId,
+                include_items: includeItems,
+                restrict_to_user_campus: restrictToUserCampus,
             }
         });
         return response.data as SuccessResponse<Store[]>;

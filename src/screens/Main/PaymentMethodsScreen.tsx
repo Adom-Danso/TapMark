@@ -93,8 +93,8 @@ const MethodCard = ({ method, onSetDefault, onRemove }: { method: PaymentMethodT
 };
 
 const PaymentMethodsScreen = (
-  { navigation, route, onSetDefault, onAddMethod, onRemoveMethod }: 
-  { navigation: any; route: { params?: PaymentMethodsRouteParams }; onSetDefault: (methodId: string) => void; onAddMethod: (method: PaymentMethodType) => void; onRemoveMethod: (methodId: string) => void }) => {
+  { navigation, route, onSetDefault, onAddMethod, onRemoveMethod }:
+    { navigation: any; route: { params?: PaymentMethodsRouteParams }; onSetDefault: (methodId: string) => void; onAddMethod: (method: PaymentMethodType) => void; onRemoveMethod: (methodId: string) => void }) => {
   const insets = useSafeAreaInsets();
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addStep, setAddStep] = useState('choose'); // 'choose' | 'form'
@@ -117,7 +117,7 @@ const PaymentMethodsScreen = (
   const origin = route?.params?.origin ?? 'profile';
   const isExitingRef = useRef(false);
 
-  const {paymentMethods} = usePaymentMethods();
+  const { paymentMethods } = usePaymentMethods();
   const [bankList, setBankList] = useState<Bank[]>([]);
 
   async function fetchPaystackBanks() {
@@ -475,13 +475,13 @@ const PaymentMethodsScreen = (
               >
                 <Text style={styles.modalSecondaryText}>{addStep === 'form' ? 'Back' : 'Cancel'}</Text>
               </TouchableOpacity>
-              <TouchableOpacity
+              {addStep === 'choose' && <TouchableOpacity
                 style={[styles.modalPrimary]}
                 activeOpacity={0.9}
                 onPress={submitAddMethod}
               >
                 <Text style={styles.modalPrimaryText}>Add</Text>
-              </TouchableOpacity>
+              </TouchableOpacity>}
             </View>
           </View>
         </View>

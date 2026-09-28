@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Image, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Ionicons } from '@expo/vector-icons';
 import { AUTH_COLORS, AUTH_SPACING } from '../auth/authTheme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -70,7 +71,7 @@ const SearchScreen = ({ navigation, route }: { navigation: any; route: any }) =>
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + AUTH_SPACING.screenY }]}
         showsVerticalScrollIndicator={false}
       >
@@ -199,7 +200,7 @@ const SearchScreen = ({ navigation, route }: { navigation: any; route: any }) =>
             </View>
           )}
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 };

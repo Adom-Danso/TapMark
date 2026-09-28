@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ScrollView, StatusBar, StyleSheet, View, ActivityIndicator, Text } from 'react-native';
+import { ScrollView, StatusBar, StyleSheet, View, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
 import { AUTH_COLORS, AUTH_SPACING } from '../auth/authTheme';
 import HomeHeader from '../../components/HomeHeader';
 import CategoryStrip from '../../components/CategoryStrip';
@@ -41,6 +41,29 @@ const HOME_SECTIONS = [
 ];
 
 const ONGOING_ORDERS_LIMIT = 5;
+
+const HOME_SECTION_EMPTY: Record<string, { icon: any; title: string; subtitle: string }> = {
+  save: {
+    icon: 'location-outline',
+    title: 'Nothing nearby yet',
+    subtitle: 'Stores around you will show up here once they are available.',
+  },
+  explore: {
+    icon: 'storefront-outline',
+    title: 'No stores to explore yet',
+    subtitle: 'New stores will show up here as they join TapMark.',
+  },
+  'top-rated': {
+    icon: 'star-outline',
+    title: 'No top rated stores yet',
+    subtitle: 'Stores with the best ratings will appear here first.',
+  },
+  recommended: {
+    icon: 'sparkles-outline',
+    title: 'Nothing recommended yet',
+    subtitle: 'Order a few times and we will tailor picks just for you.',
+  },
+};
 
 const HomeScreen = ({ navigation }: { navigation: any }) => {
   const { currentLocation, isLoading } = useLocation();
@@ -126,6 +149,7 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
       return response.data;
     } catch (error) {
       console.error('Error fetching stores:', error);
+      throw error;
     }
   }
   function useHomeSection(section: Sections) {
@@ -148,17 +172,22 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
     }, [saveSectionQuery.data, saveSectionQuery.status]
   )
 
-  function getSectionData(section: Sections) {
+  function getSectionQuery(section: Sections) {
     switch (section) {
       case "explore":
-        return exploreSectionQuery.data && exploreSectionQuery.status === "success" ? exploreSectionQuery.data || [] : [];
+        return exploreSectionQuery;
       case "save":
-        return saveSectionQuery.data && saveSectionQuery.status === "success" ? saveSectionQuery.data || [] : [];
+        return saveSectionQuery;
       case "top-rated":
-        return topRatedSectionQuery.data && topRatedSectionQuery.status === "success" ? topRatedSectionQuery.data || [] : [];
+        return topRatedSectionQuery;
       case "recommended":
-        return recommendedSectionQuery.data && recommendedSectionQuery.status === "success" ? recommendedSectionQuery.data || [] : [];
+        return recommendedSectionQuery;
     }
+  }
+
+  function getSectionData(section: Sections) {
+    const query = getSectionQuery(section);
+    return query?.data && query.status === "success" ? query.data || [] : [];
   }
 
   const ongoingTempOrdersQuery = useQuery({
@@ -266,9 +295,16 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
             </ScrollView>
           </View>
         )}
-        {categories.length > 0 && (
-          <View style={styles.categorySection}>
-            <CategoryStrip title="Top rated categories" categories={categories} tileSize={50} onCategoryPress={(category) => {
+        <View style={styles.categorySection}>
+          <CategoryStrip
+            title="Top rated categories"
+            categories={categories}
+            tileSize={50}
+            loading={searchStoreCategoriesQuery.isPending}
+            loadingHeight={130}
+            error={searchStoreCategoriesQuery.isError}
+            onRetry={() => searchStoreCategoriesQuery.refetch()}
+            onCategoryPress={(category) => {
               const params: any = {
                 title: category.name,
                 limit: 12,
@@ -277,31 +313,40 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
               }
               navigation.navigate('SectionList', params);
 
-            }} />
-          </View>
-        )}
-        {HOME_SECTIONS.map((section) => (
-          <HomeSectionCarousel
-            key={section.id}
-            title={section.title}
-            data={getSectionData(section.id as Sections)}
-            loading={section.id == "save" ? isLoading && saveSectionQuery.isPending : section.id == "explore" ? exploreSectionQuery.isPending : section.id == "top-rated" ? topRatedSectionQuery.isPending : recommendedSectionQuery.isPending}
-            loadingHeight={210}
-            onActionPress={() => handleSeeMorePress(section)}
-            renderItem={({ item }: { item: Store | StoreItem }) => (
-              <StoreCard
-                size={"medium"}
-                variant={'store'}
-                data={item}
-                onPress={() => handleCardPress(item)}
-                onFavorite={
-                  () => toggleFavoriteStore(item.id)
-                }
-                isFavorite={isFavoriteStore(item.id)}
-              />
-            )}
+            }}
           />
-        ))}
+        </View>
+        {HOME_SECTIONS.map((section) => {
+          const sectionQuery = getSectionQuery(section.id as Sections);
+          const emptyCopy = HOME_SECTION_EMPTY[section.id];
+          return (
+            <HomeSectionCarousel
+              key={section.id}
+              title={section.title}
+              data={getSectionData(section.id as Sections)}
+              loading={sectionQuery?.isPending}
+              loadingHeight={210}
+              onActionPress={() => handleSeeMorePress(section)}
+              emptyIcon={emptyCopy?.icon}
+              emptyTitle={emptyCopy?.title}
+              emptySubtitle={emptyCopy?.subtitle}
+              error={Boolean(sectionQuery?.isError)}
+              onRetry={() => sectionQuery?.refetch()}
+              renderItem={({ item }: { item: Store | StoreItem }) => (
+                <StoreCard
+                  size={"medium"}
+                  variant={'store'}
+                  data={item}
+                  onPress={() => handleCardPress(item)}
+                  onFavorite={
+                    () => toggleFavoriteStore(item.id)
+                  }
+                  isFavorite={isFavoriteStore(item.id)}
+                />
+              )}
+            />
+          );
+        })}
       </ScrollView>
     </View>
   );

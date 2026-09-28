@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { Ionicons } from '@expo/vector-icons';
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from '../screens/auth/authTheme';
 import { useMutation } from '@tanstack/react-query';
@@ -83,7 +84,7 @@ const RatingModal = ({ visible, title, subtitle, targetType, targetId, onClose, 
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
       <KeyboardAvoidingView
         style={styles.safeArea}
-        behavior={Platform.select({ ios: 'padding', android: undefined })}
+        behavior="padding"
       >
         <View style={styles.backdrop}>
           <View style={styles.sheet}>

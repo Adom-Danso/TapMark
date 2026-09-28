@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { Animated, Image, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -54,7 +55,7 @@ const CartScreen = () => {
   const [edits, setEdits] = useState({});
   const [amountEdits, setAmountEdits] = useState<Record<string, string>>({});
   const emptyFloat = useRef(new Animated.Value(0)).current;
-  const [confirmationModalVisible,setConfirmationModalVisible] = useState(false)
+  const [confirmationModalVisible, setConfirmationModalVisible] = useState(false)
   const [confirmationType, setConfirmationType] = useState("pending")
 
   const addOneTempOrderMutation = useMutation({
@@ -65,22 +66,46 @@ const CartScreen = () => {
       }
 
       const response = await addOneTempOrder(payload);
+      clearActiveCartId();
+      refreshCart()
+      addLocation(currentLocation!);
       return response;
     },
     onError: (error) => {
+      setConfirmationType("failure")
+      setTimeout(() => {
+        setConfirmationModalVisible(false);
+      }, 300);
       showToast("error", "Order Failed", error.message || "An error occurred while initiating your order. Please try again.");
     },
     onSuccess: (data) => {
       // setTimeout(() => {
       //   navigation.navigate('Payment', { paymentType: paymentMethod, tempOrderId: data.data.id, amountToPay: cartInvoice?.totalAmount });
       // }, 100);
-      updateCartMutation.mutate({ isOrderCompleted: true })
+      // updateCartMutation.mutate({ isOrderCompleted: true })
+      setConfirmationType("success")
+      setTimeout(() => {
+        setConfirmationModalVisible(false);
+      }, 300);
       showToast("info", "You will be notified to proceed to payment")
     }
   });
 
   const handleConfirmationRetry = () => {
-    updateCartItemMutation.mutate({isPickupComplete: true})
+    // updateCartItemMutation.mutate({ isPickupComplete: true })
+    if (activeCartId===null) {
+      return
+    }
+
+    addOneTempOrderMutation.mutate({
+      cartId: activeCartId,
+      userId: profileData.id,
+      deliveryAddressGpsLocation: { lat: currentLocation?.latitude, lng: currentLocation?.longitude },
+      deliveryFee: cartInvoice?.deliveryFee,
+      serviceFee: cartInvoice?.serviceFee,
+      deliveryInstructions: instructions,
+      paymentTiming: "upfront",
+    } as RequestBody)
   }
 
   const updateCartMutation = useMutation({
@@ -480,7 +505,7 @@ const CartScreen = () => {
 
   return (
     <View style={styles.container}>
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16 }]}
         showsVerticalScrollIndicator={false}
       >
@@ -709,7 +734,7 @@ const CartScreen = () => {
             paymentTiming: "upfront",
           } as RequestBody)}
         />
-      </ScrollView>
+      </KeyboardAwareScrollView>
       <LoadingBackdrop
         visible={addOneTempOrderMutation.isPending || isCartOperationLoading}
         message={addOneTempOrderMutation.isPending ? "Processing order..." : "Updating cart..."}

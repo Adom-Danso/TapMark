@@ -34,8 +34,6 @@ const FIELD_META = [
 
 // Maps the internal field key to the API field name expected by the backend.
 // The backend UpdateUser schema uses `phoneNumber` (camel alias of `phone_number`),
-// not `phone`. Sending `phone` is silently ignored by Pydantic, so the update
-// would return 200 OK without persisting.
 const FIELD_TO_API_KEY: Record<string, keyof User> = {
   firstName: 'firstName',
   lastName: 'lastName',

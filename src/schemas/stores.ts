@@ -21,4 +21,5 @@ export type Store = {
     coverPhoto: FileMetadata;
     workingHours: WorkingHours[];
     isAvailableOnHolidays: boolean;
+    searchMatchType: "both" | "item" | "store";
 }

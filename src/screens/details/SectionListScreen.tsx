@@ -203,6 +203,10 @@ const SectionListScreen = ({ navigation, route }: { navigation: any; route: any 
         params.maxDistance,
         params.storeCategoryIds,
         params.minimumRating,
+        null,
+        null,
+        true, // include stores that have that item in result
+        true,
       );
       setStores(response?.data || []);
     } catch (error: any) {

@@ -6,11 +6,9 @@ import {
 	StatusBar,
 	TextInput,
 	TouchableOpacity,
-	KeyboardAvoidingView,
-	Platform,
 	ActivityIndicator,
-	ScrollView,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Controller, FieldErrors, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -49,14 +47,11 @@ const ForgotPasswordPage = ({ navigation }: ForgotPasswordProps) => {
 		return (
 			<SafeAreaView style={styles.safeArea}>
 				<StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
-				<KeyboardAvoidingView
+				<KeyboardAwareScrollView
 					style={styles.container}
-					behavior={Platform.select({ ios: 'padding', android: undefined })}
+					contentContainerStyle={[styles.confirmWrap, { paddingBottom: insets.bottom + AUTH_SPACING.screenY }]}
+					keyboardShouldPersistTaps="handled"
 				>
-					<ScrollView
-						contentContainerStyle={[styles.confirmWrap, { paddingBottom: insets.bottom + AUTH_SPACING.screenY }]}
-						keyboardShouldPersistTaps="handled"
-					>
 						<View style={styles.card}>
 							<View style={styles.checkCircle}>
 								<Text style={styles.checkMark}>✓</Text>
@@ -74,8 +69,7 @@ const ForgotPasswordPage = ({ navigation }: ForgotPasswordProps) => {
 								<Text style={styles.primaryButtonText}>Back to Login</Text>
 							</TouchableOpacity>
 						</View>
-					</ScrollView>
-				</KeyboardAvoidingView>
+				</KeyboardAwareScrollView>
 			</SafeAreaView>
 		);
 	}
@@ -83,14 +77,11 @@ const ForgotPasswordPage = ({ navigation }: ForgotPasswordProps) => {
 	return (
 		<SafeAreaView style={styles.safeArea}>
 			<StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
-			<KeyboardAvoidingView
-					style={styles.container}
-				behavior={Platform.select({ ios: 'padding', android: undefined })}
+			<KeyboardAwareScrollView
+				style={styles.container}
+				contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + AUTH_SPACING.screenY }]}
+				keyboardShouldPersistTaps="handled"
 			>
-					<ScrollView
-						contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + AUTH_SPACING.screenY }]}
-						keyboardShouldPersistTaps="handled"
-					>
 					<View style={styles.card}>
 						<Text style={styles.title}>Forgot Password</Text>
 						<Text style={styles.subtitle}>
@@ -137,8 +128,7 @@ const ForgotPasswordPage = ({ navigation }: ForgotPasswordProps) => {
 							<Text style={styles.backText}>Back to Login</Text>
 						</TouchableOpacity>
 					</View>
-				</ScrollView>
-			</KeyboardAvoidingView>
+			</KeyboardAwareScrollView>
 		</SafeAreaView>
 	);
 };

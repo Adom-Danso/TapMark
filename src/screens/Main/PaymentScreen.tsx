@@ -150,7 +150,7 @@ const PaymentScreen = ({ route, navigation }: any) => {
     isResettingRef.current = true;
     navigation.reset({
       index: 0,
-      routes: [{ name: 'CartIndex' }],
+      routes: [{ name: 'Orders', params: {activeTabId: "pending"} }],
     });
   };
 

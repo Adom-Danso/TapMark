@@ -23,13 +23,14 @@ module.exports = {
       },
       "googleServicesFile": "./google-services.json",
       "package": "com.TapMark.regular",
-      "versionCode": 3,
+      "versionCode": 4,
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "./plugins/withAndroidSigning",
+      "./plugins/withAndroidWindowSoftInputMode",
       "@react-native-community/datetimepicker",
       "expo-font",
       [

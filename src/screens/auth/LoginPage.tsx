@@ -7,11 +7,10 @@ import {
 	TextInput,
 	TouchableOpacity,
 	Image,
-	KeyboardAvoidingView,
 	Platform,
 	ActivityIndicator,
-	ScrollView,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Controller, FieldErrors, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -48,7 +47,10 @@ const LoginPage = ({ navigation }: LoginProps) => {
 			});
 
 			if (response.data.userType === 'regular') {
-				navigation.replace('Main');
+				navigation.reset({
+					index: 0,
+					routes: [{ name: 'Main' }],
+				});
 			} else {
 				showToast('error', 'Invalid Account');
 			}
@@ -76,14 +78,11 @@ const LoginPage = ({ navigation }: LoginProps) => {
 	return (
 		<SafeAreaView style={styles.safeArea}>
 			<StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
-			<KeyboardAvoidingView
+			<KeyboardAwareScrollView
 				style={styles.container}
-				behavior={Platform.select({ ios: 'padding', android: undefined })}
+				contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + AUTH_SPACING.screenY }]}
+				keyboardShouldPersistTaps="handled"
 			>
-				<ScrollView
-					contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + AUTH_SPACING.screenY }]}
-					keyboardShouldPersistTaps="handled"
-				>
 					<View style={styles.heroWrap}>
 						<Image
 							source={require('../../../assets/auth-logo.png')}
@@ -188,8 +187,7 @@ const LoginPage = ({ navigation }: LoginProps) => {
 							)}
 						</TouchableOpacity>
 					</View>
-				</ScrollView>
-			</KeyboardAvoidingView>
+			</KeyboardAwareScrollView>
 		</SafeAreaView>
 	);
 };

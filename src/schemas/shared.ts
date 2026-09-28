@@ -32,6 +32,15 @@ export type MainTabParamList = {
   Profile: undefined;
 };
 
+export type CartTabParamList = {
+  CartIndex: undefined;
+  Orders: {
+    activeTabId: 'pending' | 'current' | 'past' | null;
+  };
+  OrderDetails: undefined
+  Payment: undefined;
+}
+
 export type GpsLocation = {
     [key: string] : number
 }

@@ -2,6 +2,25 @@ import React from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AUTH_COLORS, AUTH_SPACING } from '../screens/auth/authTheme';
 import SectionCarouselSkeleton from './SectionCarouselSkeleton';
+import CarouselEmptyState from './CarouselEmptyState';
+
+type HomeSectionCarouselProps = {
+  title: string;
+  actionLabel?: string;
+  onActionPress?: () => void;
+  data: any[];
+  renderItem: ({ item }: { item: any }) => React.ReactElement;
+  keyExtractor?: (item: any, index: number) => string;
+  itemSeparatorWidth?: number;
+  contentPaddingRight?: number;
+  loading?: boolean;
+  loadingHeight?: number;
+  emptyIcon?: any;
+  emptyTitle?: string;
+  emptySubtitle?: string;
+  error?: boolean;
+  onRetry?: () => void;
+};
 
 const HomeSectionCarousel = ({
   title,
@@ -14,30 +33,27 @@ const HomeSectionCarousel = ({
   contentPaddingRight = AUTH_SPACING.screenX,
   loading = false,
   loadingHeight = 210,
-}:
-{
-  title: string;
-  actionLabel?: string;
-  onActionPress?: () => void;
-  data: any[];
-  renderItem: ({ item }: { item: any }) => React.ReactElement;
-  keyExtractor?: (item: any, index: number) => string;
-  itemSeparatorWidth?: number;
-  contentPaddingRight?: number;
-  loading?: boolean;
-  loadingHeight?: number;
-}) => {
+  emptyIcon,
+  emptyTitle = 'Nothing here yet',
+  emptySubtitle = 'Stores for this section will show up here soon.',
+  error = false,
+  onRetry,
+}: HomeSectionCarouselProps) => {
+  const header = (
+    <View style={styles.headerRow}>
+      <Text style={styles.title}>{title}</Text>
+      {onActionPress ? (
+        <Pressable onPress={onActionPress} hitSlop={8}>
+          <Text style={styles.actionText}>{actionLabel}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+
   if (loading) {
     return (
       <View style={styles.container}>
-        <View style={styles.headerRow}>
-          <Text style={styles.title}>{title}</Text>
-          {onActionPress ? (
-            <Pressable onPress={onActionPress} hitSlop={8}>
-              <Text style={styles.actionText}>{actionLabel}</Text>
-            </Pressable>
-          ) : null}
-        </View>
+        {header}
         <View style={[styles.loadingRow, { minHeight: loadingHeight }]}>
           <SectionCarouselSkeleton
             itemCount={2}
@@ -51,16 +67,24 @@ const HomeSectionCarousel = ({
     );
   }
 
+  if (!data || data.length === 0) {
+    return (
+      <View style={styles.container}>
+        {header}
+        <CarouselEmptyState
+          icon={emptyIcon}
+          title={emptyTitle}
+          subtitle={emptySubtitle}
+          variant={error ? 'error' : 'empty'}
+          onRetry={onRetry}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>{title}</Text>
-        {onActionPress ? (
-          <Pressable onPress={onActionPress} hitSlop={8}>
-            <Text style={styles.actionText}>{actionLabel}</Text>
-          </Pressable>
-        ) : null}
-      </View>
+      {header}
       <FlatList
         data={data}
         renderItem={renderItem}

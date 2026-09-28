@@ -7,14 +7,16 @@ import {
 	TextInput,
 	TouchableOpacity,
 	Image,
-	KeyboardAvoidingView,
 	Platform,
 	ActivityIndicator,
-	ScrollView,
 	Modal,
 	LayoutAnimation,
 	UIManager,
 } from 'react-native';
+import {
+	KeyboardAwareScrollView,
+	type KeyboardAwareScrollViewRef,
+} from 'react-native-keyboard-controller';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -69,7 +71,7 @@ if (Platform.OS === 'android') {
 const SignupPage = ({ navigation }: SignUpProps) => {
 	const insets = useSafeAreaInsets();
 	const [currentStep, setCurrentStep] = useState(0);
-	const scrollRef = useRef<ScrollView | null>(null);
+	const scrollRef = useRef<KeyboardAwareScrollViewRef | null>(null);
 	const firstNameRef = useRef<TextInput | null>(null);
 	const lastNameRef = useRef<TextInput | null>(null);
 	const emailRef = useRef<TextInput | null>(null);
@@ -263,16 +265,13 @@ const SignupPage = ({ navigation }: SignUpProps) => {
 		<>
 			<SafeAreaView style={styles.safeArea}>
 				<StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
-				<KeyboardAvoidingView
+				<KeyboardAwareScrollView
+					ref={scrollRef}
 					style={styles.container}
-					behavior={Platform.select({ ios: 'padding', android: undefined })}
+					contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + AUTH_SPACING.screenY }]}
+					keyboardShouldPersistTaps="handled"
+					keyboardDismissMode="on-drag"
 				>
-					<ScrollView
-						ref={scrollRef}
-						contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + AUTH_SPACING.screenY }]}
-						keyboardShouldPersistTaps="handled"
-						keyboardDismissMode="on-drag"
-					>
 						<View style={styles.topBar}>
 							{currentStep > 0 ? (
 								<TouchableOpacity
@@ -617,8 +616,7 @@ const SignupPage = ({ navigation }: SignUpProps) => {
 								</Text>
 							</View>
 						</View>
-					</ScrollView>
-				</KeyboardAvoidingView>
+				</KeyboardAwareScrollView>
 			</SafeAreaView>
 
 			<Modal visible={campusOpen} transparent animationType="fade">

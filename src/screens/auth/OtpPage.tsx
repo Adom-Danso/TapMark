@@ -7,10 +7,8 @@ import {
 	TouchableOpacity,
 	StatusBar,
 	ActivityIndicator,
-	KeyboardAvoidingView,
-	Platform,
-	ScrollView,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from './authTheme';
 import { verifyOtp } from '@/functions/auth/verify-otp';
@@ -104,7 +102,10 @@ const OtpPage = ({ route, navigation }: OtpProps) => {
 				phone: response.data.phoneNumber,
 				otherNames: response.data.otherNames,
 			});
-			navigation.replace('Main');
+			navigation.reset({
+				index: 0,
+				routes: [{ name: 'Main' }],
+			});
 		} catch (error: any) {
 			showToast('error', 'Verification Failed', error.message || 'An error occurred during verification. Please try again.');
 		} finally {
@@ -149,14 +150,11 @@ const OtpPage = ({ route, navigation }: OtpProps) => {
 	return (
 		<SafeAreaView style={styles.safeArea}>
 			<StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
-			<KeyboardAvoidingView
+			<KeyboardAwareScrollView
 				style={styles.container}
-				behavior={Platform.select({ ios: 'padding', android: undefined })}
+				contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + AUTH_SPACING.screenY }]}
+				keyboardShouldPersistTaps="handled"
 			>
-				<ScrollView
-					contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + AUTH_SPACING.screenY }]}
-					keyboardShouldPersistTaps="handled"
-				>
 					<View style={styles.heroWrap}>
 						<Text style={styles.kicker}>Verification code</Text>
 						<Text style={styles.heroTitle}>Confirm it’s you</Text>
@@ -242,8 +240,7 @@ const OtpPage = ({ route, navigation }: OtpProps) => {
 							</View>
 						</View>
 					</View>
-				</ScrollView>
-			</KeyboardAvoidingView>
+			</KeyboardAwareScrollView>
 		</SafeAreaView>
 	);
 };
