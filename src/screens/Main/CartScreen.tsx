@@ -100,7 +100,7 @@ const CartScreen = () => {
 
     addOneTempOrderMutation.mutate({
       cartId: activeCartId,
-      userId: profileData.id,
+      userId: profileData?.id,
       deliveryAddressGpsLocation: { lat: currentLocation?.latitude, lng: currentLocation?.longitude },
       deliveryFee: cartInvoice?.deliveryFee,
       serviceFee: cartInvoice?.serviceFee,
@@ -184,6 +184,8 @@ const CartScreen = () => {
     fetchCartInvoiceQuery.isPending ||
     isLoading ||
     updateCartItemMutation.isPending;
+
+  const isInitialCartLoad = cartLines.length === 0 && isLoading;
 
   useEffect(() => {
     if (cartLines.length !== 0) {
@@ -500,6 +502,7 @@ const CartScreen = () => {
             <Text style={styles.emptyButtonText}>Continue searching</Text>
           </TouchableOpacity>
         </View>
+        <LoadingBackdrop visible={isInitialCartLoad} message="Loading your cart…" />
       </View>
     );
   }
@@ -571,12 +574,12 @@ const CartScreen = () => {
                           <View>
                             {(() => {
                               const draftAmount = amountEdits[item.cartLineId];
-                              const hasUncommittedAmountChange = draftAmount !== undefined && draftAmount !== item.itemAmount.toString();
+                              const hasUncommittedAmountChange = draftAmount !== undefined && draftAmount !== (item.itemAmount ?? 0).toString();
 
                               return (
                                 <>
                                   <TextInput
-                                    value={amountEdits[item.cartLineId] ?? item.itemAmount.toString()}
+                                    value={amountEdits[item.cartLineId] ?? (item.itemAmount ?? 0).toString()}
                                     onChangeText={(t) => handleAmountEditChange(item.cartLineId, t)}
                                     keyboardType="decimal-pad"
                                     style={styles.amountInputSimple}
@@ -704,7 +707,7 @@ const CartScreen = () => {
                 <TouchableOpacity
                   key={method.id}
                   activeOpacity={0.85}
-                  disabled={method.id == "tapmark-wallet" && userWallet.availableBalance < (cartInvoice ? cartInvoice.totalAmount : 0)}
+                  disabled={method.id == "tapmark-wallet" && (userWallet?.availableBalance ?? 0) < (cartInvoice ? cartInvoice.totalAmount : 0)}
                   style={[styles.paymentItem, isActive ? styles.paymentItemActive : null]}
                   onPress={() => setPaymentMethod(method.id)}
                 >
@@ -727,7 +730,7 @@ const CartScreen = () => {
           label="Slide to place order"
           onComplete={() => addOneTempOrderMutation.mutate({
             cartId: activeCartId,
-            userId: profileData.id,
+            userId: profileData?.id,
             deliveryAddressGpsLocation: { lat: currentLocation?.latitude, lng: currentLocation?.longitude },
             deliveryFee: cartInvoice?.deliveryFee,
             serviceFee: cartInvoice?.serviceFee,
