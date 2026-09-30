@@ -4,12 +4,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AUTH_COLORS, AUTH_SPACING } from '../screens/auth/authTheme';
 import SearchBar from './SearchBar';
+import LocationSkeleton from './LocationSkeleton';
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 const HomeHeader = ({
   locationLabel = 'Delivering to',
   location = 'Nii Okaiman West',
+  loading = false,
   greeting = 'What are you craving today?',
   onSearchPress,
   onLocationPress,
@@ -82,7 +84,11 @@ const HomeHeader = ({
           </View>
           <View style={styles.locationTextWrap}>
             <Text style={styles.locationLabel}>{locationLabel}</Text>
-            <Text style={styles.locationText}>{location}</Text>
+            {loading ? (
+              <LocationSkeleton width={132} height={16} radius={8} style={styles.locationSkeleton} />
+            ) : (
+              <Text style={styles.locationText}>{location}</Text>
+            )}
           </View>
           <View style={styles.locationAction}>
             <Ionicons name="chevron-down" size={18} color={AUTH_COLORS.muted} />
@@ -144,6 +150,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: AUTH_COLORS.text,
+  },
+  locationSkeleton: {
+    marginTop: 4,
   },
   locationAction: {
     width: 32,

@@ -44,7 +44,7 @@ const parseMoney = (value: unknown): number => {
 const CartScreen = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { currentLocation, isLoading: isLocationLoading, addLocation } = useLocation();
+  const { currentLocation, addLocation } = useLocation();
   const { cartLines, updateCartLineQty, removeCartLine, updateCartLine, isLoading, activeCartId, updateCartLineItemAmount, refreshCart } = useCart();
   const { profileData, userWallet } = useProfile();
 
@@ -179,7 +179,7 @@ const CartScreen = () => {
   })
 
   const isCartOperationLoading =
-    isLocationLoading ||
+    !currentLocation ||
     fetchCartInvoiceQuery.isPending ||
     isLoading ||
     updateCartItemMutation.isPending;
@@ -737,7 +737,13 @@ const CartScreen = () => {
       </KeyboardAwareScrollView>
       <LoadingBackdrop
         visible={addOneTempOrderMutation.isPending || isCartOperationLoading}
-        message={addOneTempOrderMutation.isPending ? "Processing order..." : "Updating cart..."}
+        message={
+          addOneTempOrderMutation.isPending
+            ? 'Processing order...'
+            : !currentLocation
+              ? 'Getting your location…'
+              : 'Updating cart...'
+        }
       />
       {/* Confirmation Modal (success / failure / pending) */}
       <ConfirmationModal

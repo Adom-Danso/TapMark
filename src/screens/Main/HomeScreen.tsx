@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ScrollView, StatusBar, StyleSheet, View, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
+import { ScrollView, StatusBar, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { AUTH_COLORS, AUTH_SPACING } from '../auth/authTheme';
 import HomeHeader from '../../components/HomeHeader';
 import CategoryStrip from '../../components/CategoryStrip';
@@ -264,14 +264,9 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
         <HomeHeader
           onSearchPress={handleSearchPress}
           onLocationPress={handleLocationPress}
-          location={isLoading ? 'Locating...' : (currentLocation?.name || 'Unknown location')}
+          loading={isLoading}
+          location={isLoading ? 'Locating…' : (currentLocation?.name || 'Unknown location')}
         />
-        {isLoading ? (
-          <View style={{ paddingVertical: 12, alignItems: 'center' }}>
-            <ActivityIndicator size="small" color={AUTH_COLORS.primary} />
-            <Text style={{ marginTop: 8, color: AUTH_COLORS.muted, fontSize: 12 }}>Acquiring current location…</Text>
-          </View>
-        ) : null}
         {ongoingOrders.length > 0 && (
           <View style={styles.ongoingSection}>
             <View style={styles.ongoingHeaderRow}>

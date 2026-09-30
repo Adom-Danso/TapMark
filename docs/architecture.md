@@ -16,10 +16,10 @@ This document only lists architecture details that are directly observable in th
 - Navigation param shapes are declared for `AppStackParamList` and `MainTabParamList`. See [src/schemas/shared.ts](src/schemas/shared.ts#L3-L36).
 
 ## Provider Composition and State Layers
-- `BottomTabs` wraps tabs in `CartProvider`, `ProfileProvider`, and `LocationProvider`. See [BottomTabs.tsx](BottomTabs.tsx#L159-L207).
+- `BottomTabs` wraps tabs in `CartProvider`, `ProfileProvider`, `LocationProvider`, and `LocationGate`. See [BottomTabs.tsx](BottomTabs.tsx#L1-L290).
 - `CartProvider` maintains cart lines and totals, fetches an active cart via API calls, and uses React Query for mutations and queries. See [src/context/CartContext.ts](src/context/CartContext.ts#L1-L221).
 - `FavoritesProvider` keeps a list of favorite store IDs and loads/saves them from storage. See [src/context/FavoritesContext.ts](src/context/FavoritesContext.ts#L1-L72) and [src/utils/favourites.ts](src/utils/favourites.ts#L1-L10).
-- `LocationProvider` uses `expo-location` to request permission, get current location, reverse geocode, and persist recent locations. See [src/context/LocationContext.ts](src/context/LocationContext.ts#L1-L132) and [src/utils/locations.ts](src/utils/locations.ts#L1-L10).
+- `LocationProvider` uses `expo-location` to run an explicit status state machine (`requestingPermission` → `locating` → `resolvingName` → `ready`, or `denied` / `error`), falls back to the last known position, and persists recent locations. `requestLocation()` can be re-run for retries. See [src/context/LocationContext.ts](src/context/LocationContext.ts#L1-L260) and [src/utils/locations.ts](src/utils/locations.ts#L1-L10).
 - `PaymentMethodsProvider` stores payment methods in local state and persists them. See [src/context/PaymentMethodsContext.ts](src/context/PaymentMethodsContext.ts#L1-L93) and [src/utils/payment-methods.ts](src/utils/payment-methods.ts#L1-L77).
 - `ProfileProvider` loads profile data from storage and retrieves or creates a user wallet via API, using React Query to fetch wallet data. See [src/context/ProfileContext.ts](src/context/ProfileContext.ts#L1-L86).
 

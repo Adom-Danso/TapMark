@@ -24,6 +24,7 @@ import { useCart } from './src/context/CartContext';
 import { CartProvider } from './src/context/CartContext';
 import { ProfileProvider } from '@/context/ProfileContext';
 import { LocationProvider } from '@/context/LocationContext';
+import LocationGate from './src/components/LocationGate';
 import { SearchProvider } from '@/context/SearchContext';
 import { useMutation } from '@tanstack/react-query';
 import { addOneNotificationToken } from '@/functions/shared/send-notification-token';
@@ -263,19 +264,21 @@ const BottomTabs = () => {
 			<ProfileProvider>
 				<LocationProvider>
 					<SearchProvider>
-						<Tab.Navigator
-							initialRouteName="Home"
-							screenOptions={{ headerShown: false }}
-							lazy={false}
-							detachInactiveScreens={false}
-							tabBar={(props) => <CustomTabBar {...props} />}
-						>
-							<Tab.Screen name="Home" component={HomeStack} />
-							<Tab.Screen name="Cart" component={CartStack} />
-							<Tab.Screen name="Search" component={SearchScreen} />
-							<Tab.Screen name="Favourites" component={FavoritesScreen} />
-							<Tab.Screen name="Profile" component={ProfileStack} />
-						</Tab.Navigator>
+						<LocationGate>
+							<Tab.Navigator
+								initialRouteName="Home"
+								screenOptions={{ headerShown: false }}
+								lazy={false}
+								detachInactiveScreens={false}
+								tabBar={(props) => <CustomTabBar {...props} />}
+							>
+								<Tab.Screen name="Home" component={HomeStack} />
+								<Tab.Screen name="Cart" component={CartStack} />
+								<Tab.Screen name="Search" component={SearchScreen} />
+								<Tab.Screen name="Favourites" component={FavoritesScreen} />
+								<Tab.Screen name="Profile" component={ProfileStack} />
+							</Tab.Navigator>
+						</LocationGate>
 					</SearchProvider>
 				</LocationProvider>
 			</ProfileProvider>

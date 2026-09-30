@@ -1,11 +1,13 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Animated, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Marker, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_DEFAULT, Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from '../auth/authTheme';
 import { useLocation } from '../../context/LocationContext';
 import { LocationSchema } from '@/schemas/location';
+import LocationSkeleton from '../../components/LocationSkeleton';
+import { showToast } from '@/utils/notifications';
 
 type MapPickerOrigin = 'home' | 'cart';
 
@@ -13,38 +15,44 @@ type MapPickerRouteParams = {
   origin?: MapPickerOrigin;
 };
 
+type Coords = {
+  latitude: number;
+  longitude: number;
+};
+
 const MAP_DELTA = {
   latitudeDelta: 0.015,
   longitudeDelta: 0.015,
 };
 
+const PIN_IMAGE = require('../../../assets/map-pin.png');
+const RESOLVE_DEBOUNCE_MS = 400;
+const PROGRAMMATIC_MOVE_WINDOW_MS = 1200;
+
 const MapPickerScreen = ({ navigation, route }: { navigation: any; route: { params?: MapPickerRouteParams } }) => {
   const insets = useSafeAreaInsets();
-  const { currentLocation, recentLocations, updateLocation, setCurrentLocation, getLocationName } = useLocation();
+  const { currentLocation, recentLocations, updateLocation, requestLocation, getLocationName } = useLocation();
   const origin = route?.params?.origin ?? 'home';
   const isExitingRef = useRef(false);
+  const mapRef = useRef<MapView | null>(null);
+  const mountedRef = useRef(true);
+  const resolveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resolveTokenRef = useRef(0);
+  const programmaticMoveRef = useRef<(Coords & { at: number }) | null>(null);
 
   const sheetTranslate = useRef(new Animated.Value(80)).current;
   const sheetOpacity = useRef(new Animated.Value(0)).current;
 
-  const [selectedLocation, setSelectedLocation] = useState({
-    ...currentLocation,
-  });
-  const [pinLocation, setPinLocation] = useState({
-    latitude: currentLocation.latitude,
-    longitude: currentLocation.longitude,
-  });
-
-  const mapRegion = useMemo(
-    () => ({
-      latitude: pinLocation.latitude,
-      longitude: pinLocation.longitude,
-      ...MAP_DELTA,
-    }),
-    [pinLocation]
+  const [selectedLocation, setSelectedLocation] = useState<LocationSchema | null>(currentLocation);
+  const [pinLocation, setPinLocation] = useState<Coords | null>(
+    currentLocation ? { latitude: currentLocation.latitude, longitude: currentLocation.longitude } : null,
   );
+  const [isResolvingName, setIsResolvingName] = useState(false);
+  const [isRecentering, setIsRecentering] = useState(false);
+  const [sheetHeight, setSheetHeight] = useState(0);
 
   useEffect(() => {
+    mountedRef.current = true;
     Animated.parallel([
       Animated.timing(sheetTranslate, {
         toValue: 0,
@@ -57,7 +65,23 @@ const MapPickerScreen = ({ navigation, route }: { navigation: any; route: { para
         useNativeDriver: true,
       }),
     ]).start();
+
+    return () => {
+      mountedRef.current = false;
+      if (resolveTimerRef.current) {
+        clearTimeout(resolveTimerRef.current);
+      }
+      resolveTokenRef.current += 1;
+    };
   }, [sheetOpacity, sheetTranslate]);
+
+  // The location may arrive after the screen mounts (cold start from the Cart tab).
+  useEffect(() => {
+    if (!selectedLocation && currentLocation) {
+      setSelectedLocation(currentLocation);
+      setPinLocation({ latitude: currentLocation.latitude, longitude: currentLocation.longitude });
+    }
+  }, [currentLocation, selectedLocation]);
 
   const handleExit = useCallback(() => {
     if (isExitingRef.current) {
@@ -91,33 +115,123 @@ const MapPickerScreen = ({ navigation, route }: { navigation: any; route: { para
     return unsubscribe;
   }, [handleExit, navigation]);
 
-  const handleDragEnd = (event: { nativeEvent: { coordinate: { latitude: number; longitude: number } } }) => {
-    const { latitude, longitude } = event.nativeEvent.coordinate;
-    setPinLocation({ latitude, longitude });
-    setCurrentLocation({
-      id: 'custom-pin',
-      name: getLocationName(latitude, longitude).then(name => name),
-      latitude,
-      longitude,
-    })
+  const resolveAddress = async (coords: Coords) => {
+    const token = resolveTokenRef.current + 1;
+    resolveTokenRef.current = token;
+    setIsResolvingName(true);
+
+    const name = await getLocationName(coords.latitude, coords.longitude, false);
+
+    if (!mountedRef.current || resolveTokenRef.current !== token) {
+      // A newer move superseded this lookup.
+      return;
+    }
+
+    setSelectedLocation({
+      id: `loc-${coords.latitude.toFixed(4)}-${coords.longitude.toFixed(4)}`,
+      name,
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+    });
+    setIsResolvingName(false);
+  };
+
+  const scheduleResolve = (coords: Coords) => {
+    if (resolveTimerRef.current) {
+      clearTimeout(resolveTimerRef.current);
+    }
+
+    resolveTimerRef.current = setTimeout(() => resolveAddress(coords), RESOLVE_DEBOUNCE_MS);
+  };
+
+  const isProgrammaticMove = (coords: Coords) => {
+    const target = programmaticMoveRef.current;
+    if (!target) {
+      return false;
+    }
+
+    const withinWindow = Date.now() - target.at < PROGRAMMATIC_MOVE_WINDOW_MS;
+    const matches =
+      Math.abs(target.latitude - coords.latitude) < 1e-5 && Math.abs(target.longitude - coords.longitude) < 1e-5;
+
+    if (!withinWindow || !matches) {
+      return false;
+    }
+
+    programmaticMoveRef.current = null;
+    return true;
+  };
+
+  const moveTo = (coords: Coords) => {
+    programmaticMoveRef.current = { ...coords, at: Date.now() };
+    setPinLocation(coords);
+    mapRef.current?.animateToRegion({ ...coords, ...MAP_DELTA }, 350);
+  };
+
+  // Keep the pin locked to the visual centre of the map while it is being dragged.
+  const handleRegionChange = (region: Region) => {
+    setPinLocation({ latitude: region.latitude, longitude: region.longitude });
+  };
+
+  const handleRegionChangeComplete = (region: Region) => {
+    const coords = { latitude: region.latitude, longitude: region.longitude };
+    setPinLocation(coords);
+
+    // Centring on a saved address or the GPS fix must not overwrite its name.
+    if (isProgrammaticMove(coords)) {
+      return;
+    }
+
+    scheduleResolve(coords);
   };
 
   const handleSelectRecent = (item: LocationSchema) => {
-    setCurrentLocation(item);
-    setPinLocation({ latitude: item.latitude, longitude: item.longitude });
+    if (resolveTimerRef.current) {
+      clearTimeout(resolveTimerRef.current);
+    }
+    resolveTokenRef.current += 1;
+    setIsResolvingName(false);
+    setSelectedLocation(item);
+    moveTo({ latitude: item.latitude, longitude: item.longitude });
+  };
+
+  const handleLocateMe = async () => {
+    if (isRecentering) {
+      return;
+    }
+
+    setIsRecentering(true);
+    try {
+      const resolved = await requestLocation();
+
+      if (!resolved) {
+        showToast('error', "Couldn't get your location");
+        return;
+      }
+
+      const coords = { latitude: resolved.latitude, longitude: resolved.longitude };
+      setSelectedLocation(resolved);
+      moveTo(coords);
+    } finally {
+      setIsRecentering(false);
+    }
   };
 
   const handleConfirm = () => {
-    const locationToSave = {
+    if (isResolvingName || !selectedLocation) {
+      return;
+    }
+
+    updateLocation({
       ...selectedLocation,
-      id: selectedLocation.id || `loc-${Date.now()}`,
-    };
-    updateLocation(locationToSave);
+      id: `loc-${Date.now()}`,
+    });
     handleExit();
   };
 
   const renderRecentItem = ({ item }: { item: LocationSchema }) => {
     const isActive =
+      !!selectedLocation &&
       Math.abs(item.latitude - selectedLocation.latitude) < 0.0001 &&
       Math.abs(item.longitude - selectedLocation.longitude) < 0.0001;
 
@@ -132,32 +246,38 @@ const MapPickerScreen = ({ navigation, route }: { navigation: any; route: { para
         </View>
         <View style={styles.recentTextWrap}>
           <Text style={styles.recentName}>{item.name}</Text>
-          {/* <Text style={styles.recentCoords}>
-            {item.latitude.toFixed(5)}, {item.longitude.toFixed(5)}
-          </Text> */}
         </View>
-        {isActive ? (
-          <Ionicons name="checkmark-circle" size={20} color={AUTH_COLORS.primary} />
-        ) : null}
+        {isActive ? <Ionicons name="checkmark-circle" size={20} color={AUTH_COLORS.primary} /> : null}
       </TouchableOpacity>
     );
   };
 
+  const isConfirmDisabled = isResolvingName || !selectedLocation;
+
   return (
     <View style={styles.container}>
-      <MapView
-        style={{ flex: 1 }}
-        initialRegion={mapRegion}
-        region={mapRegion}
-        provider={PROVIDER_DEFAULT}
-      >
-        <Marker
-          coordinate={pinLocation}
-          draggable
-          onDragEnd={handleDragEnd}
-          pinColor={AUTH_COLORS.primary}
-        />
-      </MapView>
+      {pinLocation ? (
+        <MapView
+          ref={mapRef}
+          style={styles.map}
+          initialRegion={{ ...pinLocation, ...MAP_DELTA }}
+          provider={PROVIDER_DEFAULT}
+          onRegionChange={handleRegionChange}
+          onRegionChangeComplete={handleRegionChangeComplete}
+        >
+          <Marker
+            coordinate={pinLocation}
+            anchor={{ x: 0.5, y: 1 }}
+            image={PIN_IMAGE}
+            zIndex={2}
+          />
+        </MapView>
+      ) : (
+        <View style={styles.mapPlaceholder}>
+          <ActivityIndicator size="large" color={AUTH_COLORS.primary} />
+          <Text style={styles.mapPlaceholderText}>Getting your map ready…</Text>
+        </View>
+      )}
 
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity style={styles.backButton} onPress={handleExit}>
@@ -167,7 +287,25 @@ const MapPickerScreen = ({ navigation, route }: { navigation: any; route: { para
         <View style={styles.headerSpacer} />
       </View>
 
+      {sheetHeight > 0 ? (
+        <TouchableOpacity
+          activeOpacity={0.9}
+          style={[styles.recenterButton, { bottom: sheetHeight + 16 }]}
+          onPress={handleLocateMe}
+          disabled={isRecentering}
+          accessibilityRole="button"
+          accessibilityLabel="Use my current location"
+        >
+          {isRecentering ? (
+            <ActivityIndicator size="small" color={AUTH_COLORS.primary} />
+          ) : (
+            <Ionicons name="navigate" size={20} color={AUTH_COLORS.primary} />
+          )}
+        </TouchableOpacity>
+      ) : null}
+
       <Animated.View
+        onLayout={(event) => setSheetHeight(event.nativeEvent.layout.height)}
         style={[
           styles.sheet,
           {
@@ -176,16 +314,24 @@ const MapPickerScreen = ({ navigation, route }: { navigation: any; route: { para
           },
         ]}
       >
+        <View style={styles.handle} />
         <View style={styles.currentWrap}>
-          <Text style={styles.currentLabel}>Current location</Text>
-          <Text style={styles.currentName}>{currentLocation.name}</Text>
+          <Text style={styles.currentLabel}>Delivering to</Text>
+          {isResolvingName ? (
+            <View style={styles.resolvingWrap}>
+              <LocationSkeleton width={190} height={16} radius={8} />
+              <Text style={styles.currentHint}>Finding address…</Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.currentName} numberOfLines={1}>
+                {selectedLocation?.name || 'Drop a pin to set your address'}
+              </Text>
+              <Text style={styles.currentHint}>Pan the map to move the pin</Text>
+            </>
+          )}
         </View>
-        {/* <View style={styles.coordsCard}>
-          <Text style={styles.coordsLabel}>Selected coordinates</Text>
-          <Text style={styles.coordsValue}>
-            {pinLocation.latitude.toFixed(5)} , {pinLocation.longitude.toFixed(5)}
-          </Text>
-        </View> */}
+
         <Text style={styles.sectionTitle}>Recent locations</Text>
         <FlatList
           data={recentLocations}
@@ -194,19 +340,32 @@ const MapPickerScreen = ({ navigation, route }: { navigation: any; route: { para
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
           style={styles.recentList}
+          keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <View style={styles.emptyIconWrap}>
                 <Ionicons name="navigate" size={18} color={AUTH_COLORS.primary} />
               </View>
               <Text style={styles.emptyTitle}>No recent locations</Text>
-              <Text style={styles.emptySubtitle}>Drag the pin and confirm to save one here.</Text>
+              <Text style={styles.emptySubtitle}>Move the map and confirm to save one here.</Text>
             </View>
           }
         />
-        <TouchableOpacity activeOpacity={0.9} style={styles.confirmButton} onPress={handleConfirm}>
-          <Ionicons name="checkmark" size={18} color="#fff" />
-          <Text style={styles.confirmText}>Confirm location</Text>
+
+        <TouchableOpacity
+          activeOpacity={isConfirmDisabled ? 1 : 0.9}
+          style={[styles.confirmButton, isConfirmDisabled ? styles.confirmButtonDisabled : null]}
+          onPress={handleConfirm}
+          disabled={isConfirmDisabled}
+        >
+          {isResolvingName ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Ionicons name="checkmark" size={18} color="#fff" />
+          )}
+          <Text style={styles.confirmText}>
+            {isResolvingName ? 'Finding address…' : 'Confirm location'}
+          </Text>
         </TouchableOpacity>
       </Animated.View>
     </View>
@@ -217,6 +376,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: AUTH_COLORS.background,
+  },
+  map: {
+    flex: 1,
+  },
+  mapPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  mapPlaceholderText: {
+    fontSize: 13,
+    color: AUTH_COLORS.muted,
   },
   header: {
     position: 'absolute',
@@ -251,6 +423,21 @@ const styles = StyleSheet.create({
   headerSpacer: {
     width: 40,
   },
+  recenterButton: {
+    position: 'absolute',
+    right: AUTH_SPACING.screenX,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: AUTH_COLORS.card,
+    shadowColor: AUTH_COLORS.shadow,
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
+  },
   sheet: {
     position: 'absolute',
     left: 0,
@@ -260,7 +447,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: AUTH_SPACING.screenX,
-    paddingTop: 12,
+    paddingTop: 10,
     paddingBottom: AUTH_SPACING.screenY,
     shadowColor: AUTH_COLORS.shadow,
     shadowOpacity: 1,
@@ -268,8 +455,16 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -8 },
     elevation: 6,
   },
+  handle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: AUTH_COLORS.line,
+    marginBottom: 14,
+  },
   currentWrap: {
-    marginBottom: 12,
+    marginBottom: 14,
   },
   currentLabel: {
     fontSize: 12,
@@ -281,22 +476,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: AUTH_COLORS.text,
   },
-  coordsCard: {
-    paddingHorizontal: AUTH_SPACING.block,
-    paddingVertical: 12,
-    borderRadius: AUTH_RADII.card,
-    backgroundColor: AUTH_COLORS.background,
-    marginBottom: 14,
+  resolvingWrap: {
+    marginTop: 6,
+    gap: 8,
   },
-  coordsLabel: {
+  currentHint: {
+    marginTop: 6,
     fontSize: 12,
     color: AUTH_COLORS.muted,
-  },
-  coordsValue: {
-    marginTop: 4,
-    fontSize: 15,
-    fontWeight: '600',
-    color: AUTH_COLORS.text,
   },
   sectionTitle: {
     fontSize: 16,
@@ -369,16 +556,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: AUTH_COLORS.text,
   },
-  recentCoords: {
-    marginTop: 2,
-    fontSize: 12,
-    color: AUTH_COLORS.muted,
-  },
   confirmButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    marginTop: 4,
     paddingVertical: 14,
     borderRadius: AUTH_RADII.pill,
     backgroundColor: AUTH_COLORS.primary,
@@ -387,6 +570,11 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
     elevation: 4,
+  },
+  confirmButtonDisabled: {
+    backgroundColor: AUTH_COLORS.muted,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   confirmText: {
     color: '#fff',

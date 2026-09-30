@@ -9,6 +9,8 @@ This list is based on the actual component implementations. Each entry links to 
 - HomeHeader: Header block with location picker, greeting, and embedded `SearchBar`. See [src/components/HomeHeader.jsx](src/components/HomeHeader.jsx#L1-L170).
 - HomeSectionCarousel: Titled horizontal carousel with optional action, loading state, and `renderItem`. See [src/components/HomeSectionCarousel.tsx](src/components/HomeSectionCarousel.tsx#L1-L115).
 - LoadingBackdrop: Full-screen overlay with spinner and optional message. See [src/components/LoadingBackdrop.jsx](src/components/LoadingBackdrop.jsx#L1-L63).
+- LocationGate: Blocks the app behind a retry screen when location permission is denied or no GPS fix is available. See [src/components/LocationGate.tsx](src/components/LocationGate.tsx#L1-L140).
+- LocationSkeleton: Animated shimmer bar used as the loading placeholder for address text. See [src/components/LocationSkeleton.tsx](src/components/LocationSkeleton.tsx#L1-L54).
 - OrderCard: Styled card that displays order metadata, status, and a reorder action. See [src/components/OrderCard.tsx](src/components/OrderCard.tsx#L1-L221).
 - OtpModal: Modal OTP input with resend flow; calls `onVerify(code)` and `onClose()`. See [src/components/OtpModal.jsx](src/components/OtpModal.jsx#L1-L308).
 - SearchBar: Pressable search input shell with optional filter button. See [src/components/SearchBar.jsx](src/components/SearchBar.jsx#L1-L82).

@@ -52,7 +52,6 @@ const CategoryStrip = ({
 
   const header = (
     <View style={styles.headerRow}>
-      <Text style={styles.title}>{title}</Text>
       {actionLabel ? (
         <Pressable onPress={onActionPress} hitSlop={8}>
           <Text style={styles.actionText}>{actionLabel}</Text>

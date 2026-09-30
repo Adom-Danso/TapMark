@@ -1,117 +1,226 @@
 import { LocationSchema } from '@/schemas/location';
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import * as Location from 'expo-location';
 import { showToast } from '@/utils/notifications';
 import { getLocations, saveLocations } from '@/utils/locations';
 
+export type LocationStatus =
+  | 'idle'
+  | 'requestingPermission'
+  | 'locating'
+  | 'resolvingName'
+  | 'ready'
+  | 'denied'
+  | 'error';
+
 type LocationContextType = {
   currentLocation: LocationSchema | null;
+  status: LocationStatus;
   isLoading: boolean;
+  isLocating: boolean;
+  isResolvingName: boolean;
   recentLocations: LocationSchema[];
+  requestLocation: () => Promise<LocationSchema | null>;
   updateLocation: (location: LocationSchema) => void;
   setCurrentLocation: (location: LocationSchema) => void;
   addLocation: (location: LocationSchema) => void;
-  getLocationName: (latitude: number, longitude: number) => Promise<string>;
-}
+  getLocationName: (latitude: number, longitude: number, notify?: boolean) => Promise<string>;
+};
+
 const LocationContext = createContext<LocationContextType | null>(null);
+
+/** How long we wait for a GPS lock before surfacing a retryable error. */
+const LOCATE_TIMEOUT_MS = 15000;
 
 const normalizeKey = (location: LocationSchema) => `${location.name}-${location.latitude.toFixed(4)}-${location.longitude.toFixed(4)}`;
 
+const withTimeout = <T,>(promise: Promise<T>, ms: number, message: string): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+
 export const LocationProvider = ({ children }: { children: React.ReactNode }) => {
-  const [currentLocation, setCurrentLocation] = useState<LocationSchema | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [currentLocation, setCurrentLocationState] = useState<LocationSchema | null>(null);
+  const [status, setStatus] = useState<LocationStatus>('idle');
   const [recentLocations, setRecentLocations] = useState<LocationSchema[]>([]);
+  const requestRef = useRef(0);
+  const currentLocationRef = useRef<LocationSchema | null>(null);
+
+  const setCurrentLocation = useCallback((location: LocationSchema) => {
+    currentLocationRef.current = location;
+    setCurrentLocationState(location);
+  }, []);
+
+  const reverseGeocode = async (latitude: number, longitude: number, notify = false): Promise<string | null> => {
+    try {
+      const [place] = await Location.reverseGeocodeAsync({ latitude, longitude });
+      if (!place) {
+        return null;
+      }
+      return place.city || place.street || place.name || 'Current Location';
+    } catch (error) {
+      if (notify) {
+        showToast('error', 'Failed to get location name');
+      }
+      return null;
+    }
+  };
+
+  const getLocationName = async (latitude: number, longitude: number, notify = true) => {
+    const name = await reverseGeocode(latitude, longitude, notify);
+    return name || 'Unknown Location';
+  };
 
   const updateLocation = (location: LocationSchema) => {
     setCurrentLocation(location);
-    setRecentLocations((prev) => {
-      const next = [location, ...prev.filter((item) => normalizeKey(item) !== normalizeKey(location))];
-      return next.slice(0, 6);
-    });
-  };
-
-  const getLocationName = async (latitude: number, longitude: number) => {
-    try {
-      const [place] = await Location.reverseGeocodeAsync({ latitude, longitude });
-      return place.city || place.street || place.name || "Unknown Location";
-    } catch (error) {
-      showToast("error", "Failed to get location name");
-      return "Unknown Location";
-    }
+    const next = [location, ...recentLocations.filter((item) => normalizeKey(item) !== normalizeKey(location))].slice(0, 6);
+    setRecentLocations(next);
+    saveLocations(next);
   };
 
   const addLocation = (location: LocationSchema) => {
-    const newRecentLocations = [location, ...recentLocations.filter((item) => normalizeKey(item) !== normalizeKey(location))].slice(0, 6);
-    setRecentLocations(newRecentLocations);
-    saveLocations(newRecentLocations);
+    const next = [location, ...recentLocations.filter((item) => normalizeKey(item) !== normalizeKey(location))].slice(0, 6);
+    setRecentLocations(next);
+    saveLocations(next);
   };
 
+  const requestLocation = useCallback(async (): Promise<LocationSchema | null> => {
+    const requestId = requestRef.current + 1;
+    requestRef.current = requestId;
+    const isStale = () => requestRef.current !== requestId;
+
+    const settle = async (latitude: number, longitude: number): Promise<LocationSchema | null> => {
+      if (isStale()) {
+        return null;
+      }
+
+      const resolved: LocationSchema = {
+        id: `loc-${latitude.toFixed(4)}-${longitude.toFixed(4)}`,
+        name: 'Current Location',
+        latitude,
+        longitude,
+      };
+      setCurrentLocation(resolved);
+      setStatus('resolvingName');
+
+      const name = await reverseGeocode(latitude, longitude, false);
+      if (isStale()) {
+        return null;
+      }
+
+      const finalLocation = name ? { ...resolved, name } : resolved;
+      setCurrentLocation(finalLocation);
+      setStatus('ready');
+      return finalLocation;
+    };
+
+    try {
+      const existingPermission = await Location.getForegroundPermissionsAsync();
+      if (isStale()) {
+        return null;
+      }
+
+      if (existingPermission.status !== 'granted') {
+        setStatus('requestingPermission');
+        const { status: grantedStatus } = await Location.requestForegroundPermissionsAsync();
+        if (isStale()) {
+          return null;
+        }
+        if (grantedStatus !== 'granted') {
+          setStatus('denied');
+          showToast('error', 'Permission to access location was denied');
+          return null;
+        }
+      }
+
+      setStatus('locating');
+
+      // Surface an approximate position immediately so callers are never left
+      // waiting on a cold GPS lock before they have coordinates to work with.
+      try {
+        const lastKnown = await Location.getLastKnownPositionAsync();
+        if (isStale()) {
+          return null;
+        }
+        if (lastKnown?.coords) {
+          setCurrentLocation({
+            id: `loc-${lastKnown.coords.latitude.toFixed(4)}-${lastKnown.coords.longitude.toFixed(4)}`,
+            name: 'Current Location',
+            latitude: lastKnown.coords.latitude,
+            longitude: lastKnown.coords.longitude,
+          });
+        }
+      } catch {
+        // Last known position is best effort only.
+      }
+
+      const position = await withTimeout(
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        LOCATE_TIMEOUT_MS,
+        'Location request timed out',
+      );
+
+      if (isStale()) {
+        return null;
+      }
+
+      return await settle(position.coords.latitude, position.coords.longitude);
+    } catch (error) {
+      if (isStale()) {
+        return null;
+      }
+
+      // We already hold coordinates (last known position) — degrade gracefully
+      // instead of blocking the whole app behind a retry screen.
+      const fallback = currentLocationRef.current;
+      if (fallback) {
+        setStatus('ready');
+        return fallback;
+      }
+
+      setStatus('error');
+      return null;
+    }
+  }, [setCurrentLocation]);
+
   React.useEffect(() => {
-    async function getCurrentLocation() {
-      setIsLoading(true);
-      // load recent location from storage.
-      const recentLocs = await getLocations();
+    getLocations().then((recentLocs) => {
       if (recentLocs.length > 0) {
         setRecentLocations(recentLocs);
       }
+    });
+    requestLocation();
+  }, [requestLocation]);
 
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        showToast("error", "Permission to access location was denied");
-        setIsLoading(false);
-        return;
-      }
-
-      let location = await Location.getCurrentPositionAsync({});
-      const currentLoc: LocationSchema = {
-        id: `loc-${Date.now()}`,
-        name: 'Current Location',
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      };
-      setCurrentLocation(currentLoc);
-
-      try {
-        const [place] = await Location.reverseGeocodeAsync({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
-
-
-        if (place) {
-          currentLoc.name = place.city || place.street || place.name || "Current Location";
-        }
-      } catch (error) {
-        setIsLoading(false);
-        showToast("error", "Failed to get location name");
-        return
-      }
-
-      currentLoc.id = normalizeKey(currentLoc);
-      setCurrentLocation(currentLoc);
-      setIsLoading(false);
-    }
-
-    getCurrentLocation();
-  }, []);
-
-  React.useEffect(() => {
-    if (currentLocation) {
-      setIsLoading(false);
-    }
-  }, [currentLocation]);
+  const isLocating = status === 'idle' || status === 'requestingPermission' || status === 'locating';
+  const isResolvingName = status === 'resolvingName';
+  const isLoading = isLocating || isResolvingName;
 
   const value = useMemo(
     () => ({
       currentLocation,
+      status,
       isLoading,
+      isLocating,
+      isResolvingName,
       recentLocations,
+      requestLocation,
       updateLocation,
       setCurrentLocation,
       addLocation,
       getLocationName,
     }),
-    [currentLocation, isLoading, recentLocations]
+    [currentLocation, status, isLoading, isLocating, isResolvingName, recentLocations, requestLocation],
   );
 
   return React.createElement(LocationContext.Provider, { value: value as any }, children);
