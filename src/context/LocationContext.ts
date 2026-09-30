@@ -49,6 +49,18 @@ const withTimeout = <T,>(promise: Promise<T>, ms: number, message: string): Prom
     );
   });
 
+/**
+ * Maps feeds these straight into LatLngBounds/CameraUpdateFactory, where a NaN
+ * or out-of-range value crashes natively — so never let one reach the context.
+ */
+const isValidCoords = (latitude?: unknown, longitude?: unknown): boolean =>
+  typeof latitude === 'number' &&
+  typeof longitude === 'number' &&
+  Number.isFinite(latitude) &&
+  Number.isFinite(longitude) &&
+  Math.abs(latitude) <= 90 &&
+  Math.abs(longitude) <= 180;
+
 export const LocationProvider = ({ children }: { children: React.ReactNode }) => {
   const [currentLocation, setCurrentLocationState] = useState<LocationSchema | null>(null);
   const [status, setStatus] = useState<LocationStatus>('idle');
@@ -57,6 +69,10 @@ export const LocationProvider = ({ children }: { children: React.ReactNode }) =>
   const currentLocationRef = useRef<LocationSchema | null>(null);
 
   const setCurrentLocation = useCallback((location: LocationSchema) => {
+    if (!isValidCoords(location.latitude, location.longitude)) {
+      return;
+    }
+
     currentLocationRef.current = location;
     setCurrentLocationState(location);
   }, []);
@@ -82,6 +98,10 @@ export const LocationProvider = ({ children }: { children: React.ReactNode }) =>
   };
 
   const updateLocation = (location: LocationSchema) => {
+    if (!isValidCoords(location.latitude, location.longitude)) {
+      return;
+    }
+
     setCurrentLocation(location);
     const next = [location, ...recentLocations.filter((item) => normalizeKey(item) !== normalizeKey(location))].slice(0, 6);
     setRecentLocations(next);
@@ -89,6 +109,10 @@ export const LocationProvider = ({ children }: { children: React.ReactNode }) =>
   };
 
   const addLocation = (location: LocationSchema) => {
+    if (!isValidCoords(location.latitude, location.longitude)) {
+      return;
+    }
+
     const next = [location, ...recentLocations.filter((item) => normalizeKey(item) !== normalizeKey(location))].slice(0, 6);
     setRecentLocations(next);
     saveLocations(next);
@@ -100,7 +124,7 @@ export const LocationProvider = ({ children }: { children: React.ReactNode }) =>
     const isStale = () => requestRef.current !== requestId;
 
     const settle = async (latitude: number, longitude: number): Promise<LocationSchema | null> => {
-      if (isStale()) {
+      if (isStale() || !isValidCoords(latitude, longitude)) {
         return null;
       }
 
@@ -152,7 +176,7 @@ export const LocationProvider = ({ children }: { children: React.ReactNode }) =>
         if (isStale()) {
           return null;
         }
-        if (lastKnown?.coords) {
+        if (isValidCoords(lastKnown?.coords.latitude, lastKnown?.coords.longitude)) {
           setCurrentLocation({
             id: `loc-${lastKnown.coords.latitude.toFixed(4)}-${lastKnown.coords.longitude.toFixed(4)}`,
             name: 'Current Location',

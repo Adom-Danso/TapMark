@@ -34,7 +34,7 @@ const LocationSkeleton = ({ width = 140, height = 16, radius = 8, style }: Locat
 
   const opacity = shimmerAnim.interpolate({
     inputRange: [0, 0.5, 1],
-    outputRange: [0.45, 1, 0.45],
+    outputRange: [0.6, 1, 0.6],
   });
 
   return (
@@ -47,7 +47,7 @@ const LocationSkeleton = ({ width = 140, height = 16, radius = 8, style }: Locat
 
 const styles = StyleSheet.create({
   bar: {
-    backgroundColor: AUTH_COLORS.line,
+    backgroundColor: AUTH_COLORS.skeleton,
   },
 });
 

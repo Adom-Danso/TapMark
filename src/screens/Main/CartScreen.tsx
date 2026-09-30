@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Image, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from '../auth/authTheme';
 import { useLocation } from '../../context/LocationContext';
 import { CartLineType, useCart } from '../../context/CartContext';
@@ -43,6 +43,7 @@ const parseMoney = (value: unknown): number => {
 
 const CartScreen = () => {
   const navigation = useNavigation();
+  const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const { currentLocation, addLocation } = useLocation();
   const { cartLines, updateCartLineQty, removeCartLine, updateCartLine, isLoading, activeCartId, updateCartLineItemAmount, refreshCart } = useCart();
@@ -278,22 +279,22 @@ const CartScreen = () => {
     navigation.navigate('MapPicker', { origin: 'cart' });
   };
 
-  const hasMapCoordinates =
-    typeof currentLocation?.latitude === 'number' && typeof currentLocation?.longitude === 'number';
-  const region = hasMapCoordinates
-    ? {
-      latitude: currentLocation.latitude,
-      longitude: currentLocation.longitude,
-      latitudeDelta: 0.015,
-      longitudeDelta: 0.015,
+  const rawLatitude = currentLocation?.latitude;
+  const rawLongitude = currentLocation?.longitude;
+
+  const mapCoords = useMemo(() => {
+    if (!Number.isFinite(rawLatitude) || !Number.isFinite(rawLongitude)) {
+      return null;
     }
-    : undefined;
-  const markerCoord = hasMapCoordinates
-    ? {
-      latitude: currentLocation.latitude,
-      longitude: currentLocation.longitude,
-    }
-    : undefined;
+
+    return { latitude: rawLatitude as number, longitude: rawLongitude as number };
+  }, [rawLatitude, rawLongitude]);
+
+  const region = useMemo(() => (
+    mapCoords ? { ...mapCoords, latitudeDelta: 0.015, longitudeDelta: 0.015 } : undefined
+  ), [mapCoords]);
+
+  const markerCoord = mapCoords;
 
   const toggleEdit = (item: CartLineType) => {
     if (expandedId === item.cartLineId) {
@@ -666,10 +667,10 @@ const CartScreen = () => {
           </View>
           <Text style={styles.locationName}>{currentLocation?.name || "Current Location"}</Text>
           <Text style={styles.locationCoords}>
-            {currentLocation?.latitude.toFixed(5)}, {currentLocation?.longitude.toFixed(5)}
+            {mapCoords ? `${mapCoords.latitude.toFixed(5)}, ${mapCoords.longitude.toFixed(5)}` : 'Awaiting coordinates'}
           </Text>
           <TouchableOpacity activeOpacity={0.9} onPress={handleOpenMap} style={styles.mapPreview}>
-            {hasMapCoordinates && region && markerCoord ? (
+            {isFocused && region && markerCoord ? (
               <MapView style={styles.map} region={region} pointerEvents="none">
                 <Marker coordinate={markerCoord} pinColor={AUTH_COLORS.primary} />
               </MapView>

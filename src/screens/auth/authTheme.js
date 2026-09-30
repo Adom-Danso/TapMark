@@ -7,6 +7,7 @@ export const AUTH_COLORS = {
   text: '#1E1A1A',
   muted: '#7B6F6F',
   line: '#EFE7E3',
+  skeleton: '#E3C7C3',
   shadow: 'rgba(128, 24, 24, 0.12)',
 };
 

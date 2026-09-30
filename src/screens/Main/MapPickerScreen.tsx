@@ -29,6 +29,12 @@ const PIN_IMAGE = require('../../../assets/map-pin.png');
 const RESOLVE_DEBOUNCE_MS = 400;
 const PROGRAMMATIC_MOVE_WINDOW_MS = 1200;
 
+/** Bad coordinates crash Android's map natively — only ever seed the pin from valid values. */
+const toValidCoords = ({ latitude, longitude }: Coords): Coords | null =>
+  Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180
+    ? { latitude, longitude }
+    : null;
+
 const MapPickerScreen = ({ navigation, route }: { navigation: any; route: { params?: MapPickerRouteParams } }) => {
   const insets = useSafeAreaInsets();
   const { currentLocation, recentLocations, updateLocation, requestLocation, getLocationName } = useLocation();
@@ -45,7 +51,7 @@ const MapPickerScreen = ({ navigation, route }: { navigation: any; route: { para
 
   const [selectedLocation, setSelectedLocation] = useState<LocationSchema | null>(currentLocation);
   const [pinLocation, setPinLocation] = useState<Coords | null>(
-    currentLocation ? { latitude: currentLocation.latitude, longitude: currentLocation.longitude } : null,
+    currentLocation ? toValidCoords(currentLocation) : null,
   );
   const [isResolvingName, setIsResolvingName] = useState(false);
   const [isRecentering, setIsRecentering] = useState(false);
@@ -77,9 +83,10 @@ const MapPickerScreen = ({ navigation, route }: { navigation: any; route: { para
 
   // The location may arrive after the screen mounts (cold start from the Cart tab).
   useEffect(() => {
-    if (!selectedLocation && currentLocation) {
+    const coords = currentLocation ? toValidCoords(currentLocation) : null;
+    if (!selectedLocation && currentLocation && coords) {
       setSelectedLocation(currentLocation);
-      setPinLocation({ latitude: currentLocation.latitude, longitude: currentLocation.longitude });
+      setPinLocation(coords);
     }
   }, [currentLocation, selectedLocation]);
 
