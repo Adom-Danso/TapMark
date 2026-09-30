@@ -45,34 +45,61 @@ export function generateImageUrl(imagePath: string) {
 }
 
 
-export function checkWhetherStoreOpenedToday(workingHours: WorkingHours[]) {
-	const today = new Date();
-	const dayName = today.toLocaleDateString('en-US', { weekday: 'long' });
-
-	for (let workingHour of workingHours) {
-		if (dayName.toLowerCase() == workingHour.day.toLowerCase()) {
-			const getMinutes = (timeStr: string) => {
-				const [time, modifier] = timeStr.split(' ');
-				let [hours, minutes] = time.split(':').map(Number);
-				
-				if (modifier === 'PM' && hours !== 12) hours += 12;
-				if (modifier === 'AM' && hours === 12) hours = 0;
-				
-				return hours * 60 + minutes;
-			};
-
-			const now = new Date();
-			const currentTimeString = now.toLocaleTimeString('en-US', {
-				hour: 'numeric',
-				minute: '2-digit',
-				hour12: true
-			});
-
-			if ((getMinutes(currentTimeString) > getMinutes(workingHour.openTime)) && (getMinutes(currentTimeString) < getMinutes(workingHour.closeTime))) {
-				return true
-			}
-		}
+export function parseWorkingHoursTime(value: string): number | null {
+	if (typeof value !== 'string') {
+		return null;
 	}
 
-	return false
+	const match = /^\s*(\d{1,2}):(\d{1,2})\s*(am|pm)?\s*$/i.exec(value);
+	if (!match) {
+		return null;
+	}
+
+	let hours = Number(match[1]);
+	const minutes = Number(match[2]);
+	if (minutes > 59) {
+		return null;
+	}
+
+	const modifier = match[3]?.toLowerCase();
+	if (modifier) {
+		if (hours < 1 || hours > 12) {
+			return null;
+		}
+		if (modifier === 'pm' && hours !== 12) hours += 12;
+		if (modifier === 'am' && hours === 12) hours = 0;
+	} else if (hours > 23) {
+		return null;
+	}
+
+	return hours * 60 + minutes;
+}
+
+export function checkWhetherStoreOpenedToday(workingHours: WorkingHours[]) {
+	const today = new Date();
+	const dayName = today.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+
+	for (const entry of workingHours) {
+		const [day, hours] = Object.entries(entry)[0] ?? [];
+		if (!day || !hours) {
+			continue;
+		}
+
+		if (day.toLowerCase() !== dayName) {
+			continue;
+		}
+
+		const openMinutes = parseWorkingHoursTime(hours.open);
+		const closeMinutes = parseWorkingHoursTime(hours.closes);
+		if (openMinutes === null || closeMinutes === null) {
+			return false;
+		}
+
+		const now = new Date();
+		const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+		return nowMinutes > openMinutes && nowMinutes < closeMinutes;
+	}
+
+	return false;
 }

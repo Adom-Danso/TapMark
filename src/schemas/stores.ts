@@ -2,9 +2,10 @@ import { GpsLocation } from "@/schemas/shared";
 import { FileMetadata } from "@/schemas/filemetadata";
 
 export type WorkingHours = {
-    day: string; // e.g., "monday", "tuesday", etc.
-    openTime: string; // e.g., "09:00"
-    closeTime: string; // e.g., "17:00"
+    [day: string]: {
+        open: string; // e.g., "08:00am"
+        closes: string; // e.g., "8:00pm"
+    };
 }
 
 export type Store = {

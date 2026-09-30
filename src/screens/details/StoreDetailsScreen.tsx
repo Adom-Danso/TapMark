@@ -27,11 +27,6 @@ const StoreDetailsScreen = ({ route, navigation }: StoreDetailsScreenProps) => {
   const { toggleFavoriteStore, isFavoriteStore } = useFavorites();
   const favoriteScale = useRef(new Animated.Value(1)).current;
 
-  const dayOrder = useMemo(
-    () => ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
-    [],
-  );
-
   const toTitleCase = (value: string) => {
     if (!value) {
       return value;
@@ -44,42 +39,34 @@ const StoreDetailsScreen = ({ route, navigation }: StoreDetailsScreenProps) => {
       .join(' ');
   };
 
-  const normalizedHours = useMemo(() => {
-    if (!store?.workingHours?.length) {
-      return [] as WorkingHours[];
-    }
-
-    const hoursByDay = new Map(
-      store.workingHours.map((entry) => [entry.day.toLowerCase(), entry]),
-    );
-
-    return dayOrder.map((day) =>
-      hoursByDay.get(day) || { day, openTime: '', closeTime: '' },
-    );
-  }, [dayOrder, store?.workingHours]);
+  const workingHours = useMemo(() => store?.workingHours ?? [], [store?.workingHours]);
 
   const todayHours = useMemo(() => {
-    if (!normalizedHours.length) {
-      return null;
+    const todayName = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+
+    for (const entry of workingHours) {
+      const [day, hours] = Object.entries(entry)[0] ?? [];
+      if (day?.toLowerCase() === todayName) {
+        return hours ?? null;
+      }
     }
 
-    const todayIndex = (new Date().getDay() + 6) % 7;
-    return normalizedHours[todayIndex];
-  }, [normalizedHours]);
+    return null;
+  }, [workingHours]);
 
-  const formatHours = (hours: WorkingHours | null) => {
-    if (!hours || (!hours.openTime && !hours.closeTime)) {
+  const formatHours = (hours: WorkingHours[string] | null) => {
+    if (!hours || (!hours.open && !hours.closes)) {
       return 'Store is closed at the moment.';
     }
 
-    if (!hours.openTime || !hours.closeTime) {
-      return hours.openTime || hours.closeTime;
+    if (!hours.open || !hours.closes) {
+      return hours.open || hours.closes;
     }
 
-    return `${hours.openTime} - ${hours.closeTime}`;
+    return `${hours.open} - ${hours.closes}`;
   };
 
-  const hasWorkingHours = normalizedHours.length > 0;
+  const hasWorkingHours = workingHours.length > 0;
 
   async function fetchStoreItems() {
     try {
@@ -263,7 +250,7 @@ const StoreDetailsScreen = ({ route, navigation }: StoreDetailsScreenProps) => {
             <Text
               style={[
                 styles.hoursValue,
-                !hasWorkingHours || (!todayHours?.openTime && !todayHours?.closeTime)
+                !hasWorkingHours || (!todayHours?.open && !todayHours?.closes)
                   ? styles.hoursClosed
                   : null,
               ]}
@@ -273,21 +260,28 @@ const StoreDetailsScreen = ({ route, navigation }: StoreDetailsScreenProps) => {
           </View>
 
           {showAllHours ? (
-            normalizedHours.length ? (
+            workingHours.length ? (
               <View style={styles.weeklyList}>
-                {normalizedHours.map((entry) => (
-                  <View key={entry.day} style={styles.hoursRow}>
-                    <Text style={styles.dayLabel}>{toTitleCase(entry.day)}</Text>
-                    <Text
-                      style={[
-                        styles.hoursValue,
-                        !entry.openTime && !entry.closeTime ? styles.hoursClosed : null,
-                      ]}
-                    >
-                      {formatHours(entry)}
-                    </Text>
-                  </View>
-                ))}
+                {workingHours.map((entry) => {
+                  const [day, hours] = Object.entries(entry)[0] ?? [];
+                  if (!day || !hours) {
+                    return null;
+                  }
+
+                  return (
+                    <View key={day} style={styles.hoursRow}>
+                      <Text style={styles.dayLabel}>{toTitleCase(day)}</Text>
+                      <Text
+                        style={[
+                          styles.hoursValue,
+                          !hours.open && !hours.closes ? styles.hoursClosed : null,
+                        ]}
+                      >
+                        {formatHours(hours)}
+                      </Text>
+                    </View>
+                  );
+                })}
               </View>
             ) : (
               <Text style={styles.hoursEmpty}>Hours unavailable</Text>
