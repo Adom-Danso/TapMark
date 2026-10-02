@@ -23,7 +23,7 @@ module.exports = {
       },
       "googleServicesFile": "./google-services.json",
       "package": "com.TapMark.regular",
-      "versionCode": 7,
+      "versionCode": 8,
     },
     "web": {
       "favicon": "./assets/favicon.png"
