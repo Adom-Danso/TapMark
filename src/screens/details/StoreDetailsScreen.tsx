@@ -209,26 +209,6 @@ const StoreDetailsScreen = ({ route, navigation }: StoreDetailsScreenProps) => {
               <Ionicons name="star" size={14} color="#F5A623" />
               <Text style={styles.statLabel}>{averageRating?.toFixed(1)}</Text>
             </View> */}
-            <View
-              style={[
-                styles.statPill,
-                isOpen ? styles.openBadge : styles.closedBadge,
-              ]}
-            >
-              <Ionicons
-                name={isOpen ? 'time-outline' : 'close-circle-outline'}
-                size={14}
-                color={isOpen ? '#1B8A3F' : '#B42318'}
-              />
-              <Text
-                style={[
-                  styles.statLabel,
-                  isOpen ? styles.openText : styles.closedText,
-                ]}
-              >
-                {isOpen ? 'Open now' : 'Closed'}
-              </Text>
-            </View>
           </View>
 
           <Text style={styles.subMeta}>

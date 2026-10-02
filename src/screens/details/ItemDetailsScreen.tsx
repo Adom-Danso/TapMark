@@ -1,7 +1,9 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import {
   Image,
+  Pressable,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -274,9 +276,18 @@ const ItemDetailsScreen = ({ route, navigation }: StoreItemDetailScreenProps) =>
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <Pressable style={styles.backButton} onPress={() => navigation.goBack()} hitSlop={10}>
+          <Ionicons name="chevron-back" size={22} color={AUTH_COLORS.text} />
+        </Pressable>
+      </View>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: insets.top + 72, paddingBottom: insets.bottom + 120 },
+        ]}
       >
         {resolvedImageUri ? (
           <Image source={{ uri: resolvedImageUri }} style={styles.image} resizeMode="cover" />
@@ -586,8 +597,31 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: AUTH_SPACING.screenX,
-    paddingTop: 16,
     gap: 14,
+  },
+  header: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: AUTH_SPACING.screenX,
+    paddingBottom: 12,
+    zIndex: 10,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: AUTH_COLORS.card,
+    shadowColor: AUTH_COLORS.shadow,
+    shadowOpacity: 1,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   image: {
     width: '100%',
