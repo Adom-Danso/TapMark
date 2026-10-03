@@ -19,6 +19,8 @@ import { searchOrders } from '@/functions/orders/search-orders';
 import { searchTempOrders } from '@/functions/orders/search_temp_orders';
 import { useProfile } from '@/context/ProfileContext';
 import OngoingOrderCard, { OngoingOrderCardData } from '@/components/OngoingOrderCard';
+import { getCartInvoice } from '@/functions/cart/get-cart-invoice';
+import LoadingBackdrop from '@/components/LoadingBackdrop';
 
 type Sections = "save" | "explore" | "top-rated" | "recommended";
 
@@ -71,6 +73,7 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
   const { profileData } = useProfile();
   const [categories, setCategories] = useState<StoreCategories[]>([]);
   const [homeSections, setHomeSections] = useState<any[]>(HOME_SECTIONS);
+  const [isFetchingCartInvoice, setIsFetchingCartInvoice] = useState(false);
 
 
   const searchStoreCategoriesQuery = useQuery({
@@ -214,6 +217,9 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
       id: order.id,
       status: 'awaiting_payment',
       createdAt: order.createdAt,
+      cartId: order.cartId,
+      paymentMethod: order.paymentMethod,
+      deliveryAddressGpsLocation: order.deliveryAddressGpsLocation,
     }));
 
     const paidOrders: OngoingOrderCardData[] = (ongoingOrdersQuery.data || [])
@@ -221,7 +227,7 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
       .map((order) => ({
         id: order.id,
         status: 'preparing',
-        total: (order.deliveryFee || 0) + (order.serviceFee || 0) + (order.payment?.amount || 0),
+        total: (order.payment?.amount || 0),
         createdAt: order.createdAt,
       }));
 
@@ -231,17 +237,43 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
     return [...tempOrders.sort(sortByCreatedAtDesc), ...paidOrders.sort(sortByCreatedAtDesc)];
   }, [ongoingTempOrdersQuery.data, ongoingOrdersQuery.data]);
 
-  const handleOngoingOrderPress = (order: OngoingOrderCardData) => {
+  const handleOngoingOrderPress = async (order: OngoingOrderCardData) => {
     if (order.status === 'awaiting_payment') {
-      navigation.navigate('Orders', { activeTabId: 'pending' });
+      if (!order.cartId || !order.deliveryAddressGpsLocation) {
+        showToast('error', 'Unable to pay', 'This order is missing checkout details.');
+        return;
+      }
+
+      setIsFetchingCartInvoice(true);
+      try {
+        const invoice = await getCartInvoice(
+          order.cartId,
+          order.deliveryAddressGpsLocation.lng,
+          order.deliveryAddressGpsLocation.lat,
+        );
+
+        navigation.navigate('Cart', {
+          screen: 'Payment',
+          params: {
+            paymentType: order.paymentMethod,
+            tempOrderId: order.id,
+            amountToPay: invoice.data.totalAmount,
+          },
+        });
+      } catch (error: any) {
+        showToast('error', 'Unable to pay', error.message || 'Failed to prepare payment. Please try again.');
+        navigation.navigate('Cart', { screen: 'Orders', params: { activeTabId: 'pending' } });
+      } finally {
+        setIsFetchingCartInvoice(false);
+      }
       return;
     }
 
-    navigation.navigate('Orders', { activeTabId: 'current' });
+    navigation.navigate('Cart', { screen: 'OrderDetails', params: { orderId: order.id } });
   };
 
   const handleSeeAllOngoingOrders = () => {
-    navigation.navigate('Orders', { activeTabId: 'current' });
+    navigation.navigate('Cart', { screen: 'Orders', params: { activeTabId: 'current' } });
   };
 
   const handleSearchPress = () => {
@@ -267,6 +299,27 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
           loading={isLoading}
           location={isLoading ? 'Locating…' : (currentLocation?.name || 'Unknown location')}
         />
+        <View style={styles.categorySection}>
+          <CategoryStrip
+            title="Top rated categories"
+            categories={categories}
+            tileSize={50}
+            loading={searchStoreCategoriesQuery.isPending}
+            loadingHeight={130}
+            error={searchStoreCategoriesQuery.isError}
+            onRetry={() => searchStoreCategoriesQuery.refetch()}
+            onCategoryPress={(category) => {
+              const params: any = {
+                title: category.name,
+                limit: 12,
+                skip: 0,
+                storeCategoryIds: [category.id]
+              }
+              navigation.navigate('SectionList', params);
+
+            }}
+          />
+        </View>
         {ongoingOrders.length > 0 && (
           <View style={styles.ongoingSection}>
             <View style={styles.ongoingHeaderRow}>
@@ -290,27 +343,6 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
             </ScrollView>
           </View>
         )}
-        <View style={styles.categorySection}>
-          <CategoryStrip
-            title="Top rated categories"
-            categories={categories}
-            tileSize={50}
-            loading={searchStoreCategoriesQuery.isPending}
-            loadingHeight={130}
-            error={searchStoreCategoriesQuery.isError}
-            onRetry={() => searchStoreCategoriesQuery.refetch()}
-            onCategoryPress={(category) => {
-              const params: any = {
-                title: category.name,
-                limit: 12,
-                skip: 0,
-                storeCategoryIds: [category.id]
-              }
-              navigation.navigate('SectionList', params);
-
-            }}
-          />
-        </View>
         {HOME_SECTIONS.map((section) => {
           const sectionQuery = getSectionQuery(section.id as Sections);
           const emptyCopy = HOME_SECTION_EMPTY[section.id];
@@ -343,6 +375,10 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
           );
         })}
       </ScrollView>
+      <LoadingBackdrop
+        visible={isFetchingCartInvoice}
+        message={"Preparing..."}
+      />
     </View>
   );
 };

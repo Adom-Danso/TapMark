@@ -144,17 +144,15 @@ const PaymentScreen = ({ route, navigation }: any) => {
   const [paymentId, setPaymentId] = useState<string | null>(null)
   const [hasTappedPay, setHasTappedPay] = useState(false)
   const isExitingRef = useRef(false)
-  const isResettingRef = useRef(false)
 
   const resetToCartIndex = () => {
-    isResettingRef.current = true;
     navigation.reset({
       index: 0,
       routes: [{ name: 'Orders', params: {activeTabId: "pending"} }],
     });
   };
 
-  const handleClosePress = () => {
+  const handleCancelPress = () => {
     if (!tempOrderId || deleteOneTempOrderMutation.isPending || isExitingRef.current) {
       return;
     }
@@ -308,26 +306,6 @@ const PaymentScreen = ({ route, navigation }: any) => {
   })
 
   const showCloseButton = !hasTappedPay;
-
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', (event: any) => {
-      if (isResettingRef.current) {
-        return;
-      }
-
-      if (!tempOrderId) {
-        return;
-      }
-
-      event.preventDefault();
-
-      if (!isExitingRef.current && !deleteOneTempOrderMutation.isPending) {
-        handleClosePress();
-      }
-    });
-
-    return unsubscribe;
-  }, [deleteOneTempOrderMutation.isPending, navigation, tempOrderId]);
 
   // Filter methods by payment type
   const filteredMethods = useMemo(
@@ -487,7 +465,7 @@ const PaymentScreen = ({ route, navigation }: any) => {
         {showCloseButton && (
           <TouchableOpacity
             style={styles.closeButton}
-            onPress={handleClosePress}
+            onPress={handleCancelPress}
             activeOpacity={0.9}
             disabled={deleteOneTempOrderMutation.isPending}
           >
@@ -497,7 +475,7 @@ const PaymentScreen = ({ route, navigation }: any) => {
               <Ionicons name="close" size={16} color={AUTH_COLORS.primary} />
             )}
             <Text style={styles.closeButtonText}>
-              {deleteOneTempOrderMutation.isPending ? 'Closing...' : 'Close'}
+              {deleteOneTempOrderMutation.isPending ? 'Cancelling...' : 'Cancel'}
             </Text>
           </TouchableOpacity>
         )}

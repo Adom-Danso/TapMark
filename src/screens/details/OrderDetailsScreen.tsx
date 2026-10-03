@@ -12,12 +12,13 @@ import { Order } from '@/schemas/orders';
 import { useLocation } from '@/context/LocationContext';
 import { generateImageUrl } from '@/utils/shared';
 import { updateOneOrder } from '@/functions/orders/update-one-order-by-id';
-import { OTPCode } from '@/schemas/otp-codes';
+import { OTPCode, OtpTypes } from '@/schemas/otp-codes';
 import { addOneOTPCode, RequestBody } from '@/functions/verifications/add-one-otp-code';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import RatingModal from '@/components/RatingModal';
 import ReportModal from '@/components/ReportModal';
 import { getCourierLocation } from '@/functions/directions/get-courier-location';
+import { getOneOrderOtp } from '@/functions/verifications/get-one-order-otp';
 
 const ORDER_TIMELINE_STEPS = ['placed', 'processing', 'assigned', 'pick_up_completed', 'completed'] as const;
 
@@ -268,11 +269,15 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
       setIsModalVisible(false);
     });
   };
-  const addOneOtpCodeMutation = useMutation({
-    mutationKey: ["addOneOtpCode"],
-    mutationFn: async (payload: RequestBody) => {
+  const getOneOtpCodeMutation = useMutation({
+    mutationKey: ["getOneOrderOtp"],
+    mutationFn: async (payload: {orderId: string, otpType: OtpTypes, cartItemIds: string[]}) => {
       if (otpCode) return otpCode
-      const response = await addOneOTPCode(payload)
+      const response = await getOneOrderOtp(
+        payload.orderId,
+        payload.otpType,
+        payload.cartItemIds
+      )
       setOtpCode(response.data)
       return response.data;
     },
@@ -589,17 +594,16 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
 
             {order.isPickedUp && !order.isOrderCompleted && (
               <TouchableOpacity
-                style={[styles.actionButton, styles.confirmButton, addOneOtpCodeMutation.isPending && styles.actionButtonDisabled]}
-                onPress={() => addOneOtpCodeMutation.mutate({
-                  userId: order?.assignedCourierId as string,
+                style={[styles.actionButton, styles.confirmButton, getOneOtpCodeMutation.isPending && styles.actionButtonDisabled]}
+                onPress={() => getOneOtpCodeMutation.mutate({
                   orderId: order?.id,
                   otpType: "pickup_verification",
                   cartItemIds: order?.cart.cartItems.map((value) => value.id)
                 })}
                 activeOpacity={0.85}
-                disabled={addOneOtpCodeMutation.isPending}
+                disabled={getOneOtpCodeMutation.isPending}
               >
-                {addOneOtpCodeMutation.isPending ? (
+                {getOneOtpCodeMutation.isPending ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
                   <>

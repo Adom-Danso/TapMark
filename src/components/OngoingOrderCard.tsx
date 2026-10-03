@@ -1,7 +1,9 @@
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useRef } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from '../screens/auth/authTheme';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export type OngoingOrderStatus = 'awaiting_payment' | 'preparing';
 
@@ -10,46 +12,24 @@ export type OngoingOrderCardData = {
   status: OngoingOrderStatus;
   total?: number;
   createdAt: string;
+  cartId?: string;
+  paymentMethod?: string;
+  deliveryAddressGpsLocation?: { lat: number; lng: number };
 };
 
 const STATUS_META: Record<OngoingOrderStatus, { label: string; color: string; background: string; icon: any }> = {
   awaiting_payment: {
-    label: 'Awaiting payment',
-    color: '#1D4ED8',
-    background: '#E8EFFD',
-    icon: 'card-outline',
+    label: 'Pending payment',
+    color: '#D97706',
+    background: '#FFF1D6',
+    icon: 'time-outline',
   },
   preparing: {
     label: 'Preparing',
-    color: '#1D4ED8',
-    background: '#E8EFFD',
+    color: AUTH_COLORS.primary,
+    background: AUTH_COLORS.primarySoft,
     icon: 'time-outline',
   },
-};
-
-const formatRelativeTime = (iso: string) => {
-  const created = new Date(iso).getTime();
-  if (Number.isNaN(created)) {
-    return '';
-  }
-
-  const diffMs = Date.now() - created;
-  const diffMinutes = Math.floor(diffMs / 60000);
-
-  if (diffMinutes < 1) {
-    return 'Just now';
-  }
-  if (diffMinutes < 60) {
-    return `${diffMinutes} min ago`;
-  }
-
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) {
-    return `${diffHours}h ago`;
-  }
-
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays}d ago`;
 };
 
 const OngoingOrderCard = ({
@@ -61,105 +41,108 @@ const OngoingOrderCard = ({
 }) => {
   const meta = STATUS_META[data.status];
   const isAwaitingPayment = data.status === 'awaiting_payment';
-  const relativeTime = formatRelativeTime(data.createdAt);
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scale, {
+      toValue: 0.98,
+      useNativeDriver: true,
+      speed: 20,
+      bounciness: 8,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 20,
+      bounciness: 8,
+    }).start();
+  };
 
   return (
-    <TouchableOpacity activeOpacity={0.9} style={styles.card} onPress={onPress}>
+    <AnimatedPressable
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      onPress={onPress}
+      style={[styles.card, { transform: [{ scale }] }]}
+    >
       <View style={[styles.statusPill, { backgroundColor: meta.background }]}>
-        <Ionicons name={meta.icon} size={12} color={meta.color} />
+        <Ionicons name={meta.icon} size={11} color={meta.color} />
         <Text style={[styles.statusText, { color: meta.color }]} numberOfLines={1}>
           {meta.label}
         </Text>
       </View>
 
-      <View style={styles.heroWrap}>
+      <View style={styles.bottomRow}>
         {isAwaitingPayment ? (
-          <>
-            <Text style={styles.heroPrompt}>Complete payment</Text>
-            <Text style={styles.heroHint}>Tap to view amount and pay</Text>
-          </>
+          <Text style={styles.heroPrompt} numberOfLines={1}>
+            Complete payment
+          </Text>
         ) : (
-          <>
-            <Text style={styles.heroLabel}>Total</Text>
-            <Text style={styles.heroAmount}>GHS {(data.total ?? 0).toFixed(2)}</Text>
-          </>
+          <Text style={styles.heroAmount} numberOfLines={1}>
+            GHS {(data.total ?? 0).toFixed(2)}
+          </Text>
         )}
+        {!isAwaitingPayment ? <Text style={styles.paidText}>Paid</Text> : null}
       </View>
-
-      <View style={styles.footerWrap}>
-        <Text style={styles.footerText}>
-          {isAwaitingPayment ? 'Pay to confirm' : 'Paid'}
-        </Text>
-        {relativeTime ? <Text style={styles.footerTime}>{relativeTime}</Text> : null}
-      </View>
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 };
 
 const styles = StyleSheet.create({
   card: {
-    width: 190,
-    height: 230,
+    width: 147,
+    height: 72,
     borderRadius: AUTH_RADII.card,
     backgroundColor: AUTH_COLORS.card,
-    padding: AUTH_SPACING.block,
+    paddingHorizontal: AUTH_SPACING.tight,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: AUTH_COLORS.line,
     justifyContent: 'space-between',
     shadowColor: AUTH_COLORS.shadow,
     shadowOpacity: 1,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
     elevation: 3,
   },
   statusPill: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: AUTH_RADII.pill,
   },
   statusText: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '800',
+    flexShrink: 1,
   },
-  heroWrap: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: 4,
-  },
-  heroLabel: {
-    fontSize: 12,
-    color: AUTH_COLORS.muted,
-    fontWeight: '600',
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
   },
   heroAmount: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: AUTH_COLORS.text,
-    letterSpacing: -0.4,
-  },
-  heroPrompt: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '800',
     color: AUTH_COLORS.text,
     letterSpacing: -0.3,
   },
-  heroHint: {
-    fontSize: 12,
-    color: AUTH_COLORS.muted,
-  },
-  footerWrap: {
-    gap: 2,
-  },
-  footerText: {
+  heroPrompt: {
     fontSize: 12,
     fontWeight: '700',
-    color: AUTH_COLORS.primary,
+    color: AUTH_COLORS.text,
   },
-  footerTime: {
+  paidText: {
     fontSize: 11,
-    color: AUTH_COLORS.muted,
+    fontWeight: '700',
+    color: AUTH_COLORS.primary,
   },
 });
 
