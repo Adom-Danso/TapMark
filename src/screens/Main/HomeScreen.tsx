@@ -201,6 +201,7 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
     },
     retry: 2,
     enabled: Boolean(profileData?.id),
+    refetchInterval: 30000, // Refetch every 40 seconds
   });
 
   const ongoingOrdersQuery = useQuery({
@@ -210,6 +211,7 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
       return response.data;
     },
     enabled: Boolean(profileData?.id),
+    refetchInterval: 30000, // Refetch every 30 seconds
   });
 
   const ongoingOrders = React.useMemo<OngoingOrderCardData[]>(() => {
@@ -269,7 +271,9 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
       return;
     }
 
-    navigation.navigate('Cart', { screen: 'OrderDetails', params: { orderId: order.id } });
+    // Stay inside the Home stack so going back from order details returns
+    // to Home instead of walking through the Cart tab's stack.
+    navigation.navigate('OrderDetails', { orderId: order.id });
   };
 
   const handleSeeAllOngoingOrders = () => {

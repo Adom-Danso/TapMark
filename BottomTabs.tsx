@@ -89,6 +89,10 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
 
 						if (!isFocused && !event.defaultPrevented) {
 							navigation.navigate(route.name);
+						} else if (isFocused && route.name === 'Cart' && !event.defaultPrevented) {
+							// Re-pressing the Cart tab returns to the cart root instead of
+							// staying parked on a stale deep screen (Orders/Payment).
+							navigation.navigate(route.name, { screen: 'CartIndex' });
 						}
 					};
 

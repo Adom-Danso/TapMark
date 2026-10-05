@@ -14,7 +14,7 @@ import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from '../auth/authTheme';
 import { usePaymentMethods } from '../../context/PaymentMethodsContext';
 import OtpModal from '../../components/OtpModal';
 import ConfirmationModal from '../../components/ConfirmationModal';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { addOnePayment, RequestBody } from '@/functions/payments/add-one-payment';
 import { toPaystackBankFragment, toPaystackMobileMoneyFragment } from '@/utils/payment-methods';
 import { PaymentMethodType } from '@/schemas/payments';
@@ -145,11 +145,24 @@ const PaymentScreen = ({ route, navigation }: any) => {
   const [hasTappedPay, setHasTappedPay] = useState(false)
   const isExitingRef = useRef(false)
 
-  const resetToCartIndex = () => {
+  const queryClient = useQueryClient();
+
+  // Invalidate order/request caches (covers OrdersScreen, PendingRequests and the
+  // Home ongoing-orders carousel), reset the Cart stack to its root so the tab
+  // never stays parked on Orders/Payment, then land the user on Home.
+  const exitToHome = () => {
+    queryClient.invalidateQueries({ queryKey: ['pendingRequests'] });
+    queryClient.invalidateQueries({ queryKey: ['searchOrders'] });
     navigation.reset({
       index: 0,
-      routes: [{ name: 'Orders', params: {activeTabId: "pending"} }],
+      routes: [{ name: 'CartIndex' }],
     });
+    const parentNav = navigation.getParent();
+    if (parentNav) {
+      parentNav.navigate('Home');
+    } else {
+      navigation.navigate('Home');
+    }
   };
 
   const handleCancelPress = () => {
@@ -178,7 +191,7 @@ const PaymentScreen = ({ route, navigation }: any) => {
         if (otpVerified) {
           setOtpVerified(false);
         }
-        resetToCartIndex();
+        exitToHome();
       }, 500);
     },
     onError: (error) => {
@@ -194,7 +207,7 @@ const PaymentScreen = ({ route, navigation }: any) => {
     },
     onSuccess: (data) => {
       console.log("Temp order deleted successfully", data);
-      resetToCartIndex();
+      exitToHome();
     },
     onError: (error) => {
       isExitingRef.current = false;
@@ -294,7 +307,7 @@ const PaymentScreen = ({ route, navigation }: any) => {
           if (otpVerified) {
             setOtpVerified(false);
           }
-          resetToCartIndex();
+          exitToHome();
         }, 2000);
 
       }

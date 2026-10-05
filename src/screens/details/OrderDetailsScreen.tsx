@@ -597,7 +597,7 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
                 style={[styles.actionButton, styles.confirmButton, getOneOtpCodeMutation.isPending && styles.actionButtonDisabled]}
                 onPress={() => getOneOtpCodeMutation.mutate({
                   orderId: order?.id,
-                  otpType: "pickup_verification",
+                  otpType: "confirm_delivery",
                   cartItemIds: order?.cart.cartItems.map((value) => value.id)
                 })}
                 activeOpacity={0.85}
@@ -667,7 +667,7 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
               { opacity: fade, transform: [{ scale }] },
             ]}
           >
-            <Text style={styles.modalTitle}>Pickup confirmation</Text>
+            <Text style={styles.modalTitle}>Delivery confirmation</Text>
             <Text style={styles.modalSubtitle}>
               Let the courier scan the QR or call out this OTP.
             </Text>
