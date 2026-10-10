@@ -1,16 +1,18 @@
 import { SuccessResponse } from "@/schemas/shared";
-import { StoreItem } from "@/schemas/store-items";
 import { ApiError } from "@/schemas/shared";
 import { axiosInstance } from "@/utils/axios-instance";
 import axios from "axios";
+import { GoogleRoute } from "@/schemas/directions";
 
 
 export async function getCourierLocation(
-    courier_id: string
-): Promise<SuccessResponse<{latitude: number, longitude: number}>> {
+    courier_id: string,
+    order_id: string | null = null,
+): Promise<SuccessResponse<GoogleRoute>> {
     try {
-        const response = await axiosInstance.get(`/directions/courier-location/${courier_id}`);
-        return response.data as SuccessResponse<{latitude: number, longitude: number}>;
+        const orderQuery = order_id ? `?order_id=${encodeURIComponent(order_id)}` : '';
+        const response = await axiosInstance.get(`/directions/courier-location/${courier_id}${orderQuery}`);
+        return response.data as SuccessResponse<GoogleRoute>;
     } catch (error) {
         if (axios.isAxiosError(error)) {
             if (error.response) {

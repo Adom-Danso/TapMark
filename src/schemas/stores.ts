@@ -10,6 +10,7 @@ export type WorkingHours = {
 
 export type Store = {
     id: string;
+    userId: string;
     name: string;
     address: string;
     gpsLocation: GpsLocation;

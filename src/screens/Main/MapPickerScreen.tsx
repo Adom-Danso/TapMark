@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from '../auth/authTheme';
 import { useLocation } from '../../context/LocationContext';
 import { LocationSchema } from '@/schemas/location';
+import { baseMapProps } from '@/theme/mapStyle';
 import LocationSkeleton from '../../components/LocationSkeleton';
 import { showToast } from '@/utils/notifications';
 
@@ -271,6 +272,7 @@ const MapPickerScreen = ({ navigation, route }: { navigation: any; route: { para
           provider={PROVIDER_DEFAULT}
           onRegionChange={handleRegionChange}
           onRegionChangeComplete={handleRegionChangeComplete}
+          {...baseMapProps}
         >
           <Marker
             coordinate={pinLocation}

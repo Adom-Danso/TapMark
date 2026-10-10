@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import * as ImagePicker from 'expo-image-picker';
@@ -12,7 +12,8 @@ type ReportModalProps = {
   visible: boolean;
   title: string;
   subtitle: string;
-  targetId: string;
+  relatedOrderId: string;
+  reportedPartyId: string;
   complaints: Record<string, string>;
   onClose: () => void;
 };
@@ -24,26 +25,25 @@ type EvidenceAsset = {
   type: string,
 }
 
-const ReportModal = ({ visible, title, subtitle, targetId, complaints, onClose }: ReportModalProps) => {
+const ReportModal = ({ visible, title, subtitle, relatedOrderId, reportedPartyId, complaints, onClose }: ReportModalProps) => {
   const [selectedComplaint, setSelectedComplaint] = useState('');
   const [description, setDescription] = useState('');
   const [evidence, setEvidence] = useState<EvidenceAsset | null>(null);
   const [isPickingImage, setIsPickingImage] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
-  const formData = useRef<FormData>(new FormData())
   const canSubmit = useMemo(
-    () => selectedComplaint.trim().length > 0 && description.trim().length > 0,
-    [description, selectedComplaint],
+    () =>
+      selectedComplaint.trim().length > 0 &&
+      description.trim().length > 0 &&
+      relatedOrderId.trim().length > 0 &&
+      reportedPartyId.trim().length > 0,
+    [description, relatedOrderId, reportedPartyId, selectedComplaint],
   );
   
   const addOneReportMutation = useMutation({
     mutationKey: ["addOneReport"],
-    mutationFn: async () => {
-      if (!canSubmit) {
-        throw Error("Please complete the form");
-      }
-
-      const response = await addOneReport(formData.current)
+    mutationFn: async (payload: FormData) => {
+      const response = await addOneReport(payload)
       return response.data
     },
     onSuccess: (data)=> {
@@ -98,8 +98,8 @@ const ReportModal = ({ visible, title, subtitle, targetId, complaints, onClose }
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
         setEvidence({
-          name: asset.fileName || "report_evidence",
-          type: asset.type || "image",
+          name: asset.fileName || "report_evidence.jpg",
+          type: asset.mimeType || asset.type || "image/jpeg",
           uri: asset.uri,
         });
       }
@@ -109,12 +109,36 @@ const ReportModal = ({ visible, title, subtitle, targetId, complaints, onClose }
   };
 
   const handleSubmit = () => {
-    formData.current.append("evidence_photo", evidence as any)
-    formData.current.append("report_type", selectedComplaint)
-    formData.current.append("reported_party_id", targetId)
-    formData.current.append("report_description", description.trim())
+    if (!canSubmit || addOneReportMutation.isPending) {
+      return;
+    }
 
-    addOneReportMutation.mutate()
+    // Backend expects a single JSON `report_form` field plus an optional
+    // `evidence_photo` file part. Build a fresh FormData per submit so retries
+    // never append duplicate entries.
+    const formData = new FormData();
+    formData.append(
+      "report_form",
+      JSON.stringify({
+        related_order: relatedOrderId,
+        report_type: selectedComplaint,
+        report_description: description.trim(),
+        reported_party_id: reportedPartyId,
+      }),
+    );
+
+    if (evidence) {
+      formData.append(
+        "evidence_photo",
+        {
+          uri: evidence.uri,
+          name: evidence.name,
+          type: evidence.type,
+        } as any,
+      );
+    }
+
+    addOneReportMutation.mutate(formData)
   };
 
   return (

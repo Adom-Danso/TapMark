@@ -5,12 +5,14 @@ import { useRoute } from '@react-navigation/native';
 import QRCode from 'react-native-qrcode-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AUTH_COLORS, AUTH_RADII, AUTH_SPACING } from '../auth/authTheme';
+import {decode} from "@googlemaps/polyline-codec";
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { getOneOrderById } from '@/functions/orders/get-one-order-by-id';
+import { getOneStoreById } from '@/functions/stores/get-one-store-by-id';
 import { showToast } from '@/utils/notifications';
 import { Order } from '@/schemas/orders';
 import { useLocation } from '@/context/LocationContext';
-import { generateImageUrl } from '@/utils/shared';
+import { formatEtaArrival, formatRouteDistance, formatRouteDuration, generateImageUrl } from '@/utils/shared';
 import { updateOneOrder } from '@/functions/orders/update-one-order-by-id';
 import { OTPCode, OtpTypes } from '@/schemas/otp-codes';
 import { addOneOTPCode, RequestBody } from '@/functions/verifications/add-one-otp-code';
@@ -19,15 +21,14 @@ import RatingModal from '@/components/RatingModal';
 import ReportModal from '@/components/ReportModal';
 import { getCourierLocation } from '@/functions/directions/get-courier-location';
 import { getOneOrderOtp } from '@/functions/verifications/get-one-order-otp';
+import { GoogleRoute } from '@/schemas/directions';
+import { baseMapProps, MAP_COLORS } from '@/theme/mapStyle';
+import CourierMarker from '@/components/CourierMarker';
+import DestinationMarker, { DESTINATION_MARKER_ANCHOR } from '@/components/DestinationMarker';
 
 const ORDER_TIMELINE_STEPS = ['placed', 'processing', 'assigned', 'pick_up_completed', 'completed'] as const;
 
 type OrderStage = (typeof ORDER_TIMELINE_STEPS)[number] | 'cancelled';
-
-type CourierLocation = {
-  latitude: number;
-  longitude: number;
-};
 
 type FeedbackTarget = {
   targetType: string;
@@ -142,28 +143,54 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
   const scale = useState(new Animated.Value(0.9))[0];
   const fade = useState(new Animated.Value(0))[0];
   const [deliveryAddressName, setDeliveryAddressName] = useState<string>('Loading address...');
-  const [courierLocation, setCourierLocation] = useState<CourierLocation | null>({latitude: 0.1, longitude: 0.1});
+  const [courierDirections, setCourierDirections] = useState<GoogleRoute | null>(null);
+  const [courierDirectionCoordinates, setCourierDirectionCoordinates] = useState<{ latitude: number; longitude: number }[]>([]);
   const normalizedStage = normaliseOrderStage(order as Order | undefined);
   const activeStepIndex = getTimelineStepIndex(normalizedStage);
   const isCompleted = normalizedStage === 'completed';
   const isProcessingStage = normalizedStage === 'processing';
-  const showTrackingMap = ['assigned', 'pick_up_completed', 'completed'].includes(normalizedStage);
+  const showTrackingMap = ['assigned', 'pick_up_completed'].includes(normalizedStage);
   const destinationLocation = order?.deliveryAddressGpsLocation;
+  const activeDestination = courierDirections?.destination
+    ? { latitude: courierDirections.destination.lat, longitude: courierDirections.destination.lng }
+    : destinationLocation
+      ? { latitude: destinationLocation.lat, longitude: destinationLocation.lng }
+      : null;
+  const activeCourierLocation = courierDirections?.courierLocation
+    ? { latitude: courierDirections.courierLocation.lat, longitude: courierDirections.courierLocation.lng }
+    : courierDirectionCoordinates[0] ?? null;
+  const activeRoute = courierDirections?.routes?.[0];
+  const etaDurationLabel = activeRoute ? formatRouteDuration(activeRoute.duration) : '';
+  const etaArrivalLabel = activeRoute ? formatEtaArrival(activeRoute.duration) : '';
+  const etaDistanceLabel = activeRoute?.distanceMeters != null ? formatRouteDistance(activeRoute.distanceMeters) : '';
+  const etaPrimaryLabel = etaArrivalLabel
+    ? [etaDurationLabel ? `~${etaDurationLabel}` : '', `Arriving ~${etaArrivalLabel}`].filter(Boolean).join(' · ')
+    : '—';
+  const etaSecondaryLabel = etaDistanceLabel ? `${etaDistanceLabel} away` : '';
   const mapRegion = useMemo(() => {
-    if (!courierLocation || !destinationLocation) {
+    if (!courierDirectionCoordinates.length || !activeDestination) {
       return null;
     }
 
-    const centerLatitude = (courierLocation.latitude + destinationLocation.lat) / 2;
-    const centerLongitude = (courierLocation.longitude + destinationLocation.lng) / 2;
+    let minLatitude = activeDestination.latitude;
+    let maxLatitude = activeDestination.latitude;
+    let minLongitude = activeDestination.longitude;
+    let maxLongitude = activeDestination.longitude;
+
+    for (const point of courierDirectionCoordinates) {
+      minLatitude = Math.min(minLatitude, point.latitude);
+      maxLatitude = Math.max(maxLatitude, point.latitude);
+      minLongitude = Math.min(minLongitude, point.longitude);
+      maxLongitude = Math.max(maxLongitude, point.longitude);
+    }
 
     return {
-      latitude: centerLatitude,
-      longitude: centerLongitude,
-      latitudeDelta: Math.max(Math.abs(courierLocation.latitude - destinationLocation.lat) * 2.2, 0.02),
-      longitudeDelta: Math.max(Math.abs(courierLocation.longitude - destinationLocation.lng) * 2.2, 0.02),
+      latitude: (minLatitude + maxLatitude) / 2,
+      longitude: (minLongitude + maxLongitude) / 2,
+      latitudeDelta: Math.max((maxLatitude - minLatitude) * 1.4, 0.01),
+      longitudeDelta: Math.max((maxLongitude - minLongitude) * 1.4, 0.01),
     };
-  }, [courierLocation, destinationLocation]);
+  }, [courierDirectionCoordinates, courierDirections, destinationLocation]);
   const [showCourierModal, setShowCourierModal] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [otpCode, setOtpCode] = useState<OTPCode | null>(null);
@@ -178,10 +205,10 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
 
   const shouldFetchCourierLocation = !!order && showTrackingMap && !!order.assignedCourierId
   const fetchCourierLocationQuery = useQuery({
-    queryKey: ["fetchCourierLocation", order, order?.assignedCourierId],
+    queryKey: ["fetchCourierLocation", order?.id, order?.assignedCourierId],
     queryFn: async () => {
       try {
-        const response = await getCourierLocation(order?.assignedCourierId as string)
+        const response = await getCourierLocation(order?.assignedCourierId as string, order?.id as string)
         return response.data
       } catch (error: any) {
         showToast("info", "Could not update courier location.")
@@ -193,7 +220,12 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
   })
   React.useEffect(()=>{
     if (fetchCourierLocationQuery.status == "success" && fetchCourierLocationQuery.data) {
-      setCourierLocation({latitude: fetchCourierLocationQuery.data.latitude, longitude: fetchCourierLocationQuery.data.longitude})
+      setCourierDirections(fetchCourierLocationQuery.data)
+
+      if (fetchCourierLocationQuery.data.routes.length > 0) {
+        const encodedPolyline = fetchCourierLocationQuery.data.routes[0].polyline.encodedPolyline
+        setCourierDirectionCoordinates(decode(encodedPolyline).map(([lat, lng]) => ({ latitude: lat, longitude: lng })))
+      }
     }
   }, [fetchCourierLocationQuery.status, fetchCourierLocationQuery.data])
 
@@ -218,10 +250,28 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
     }
   }, [fetchOneOrderQuery.data, fetchOneOrderQuery.status])
 
+  // A report is normally aimed at the courier. If no courier is attached we
+  // fall back to the store owner so the report still has a target.
+  const fallbackStoreId = order?.cart?.cartItems?.[0]?.storeItem?.storeId;
+  const courierId = order?.courier?.id ?? order?.assignedCourierId ?? null;
+  const needsStoreOwnerFallback = !!order && !courierId && !!fallbackStoreId;
+  const storeOwnerQuery = useQuery({
+    queryKey: ["reportStoreOwner", fallbackStoreId],
+    queryFn: async () => {
+      try {
+        const response = await getOneStoreById(fallbackStoreId as string)
+        return response.data
+      } catch (error: any) {
+        return null
+      }
+    },
+    enabled: needsStoreOwnerFallback,
+  })
+  const reportedPartyId = courierId ?? storeOwnerQuery.data?.userId ?? '';
+
   useEffect(() => {
     if (!order) {
       setDeliveryAddressName('Loading address...');
-      setCourierLocation({latitude: 0.1, longitude: 0.1});
       return;
     }
 
@@ -372,6 +422,8 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
                 </View>
                 <View style={styles.metaItem}>
                   <Text style={styles.metaLabel}>ETA</Text>
+                  <Text style={styles.metaValue}>{etaPrimaryLabel}</Text>
+                  {etaSecondaryLabel ? <Text style={styles.metaHint}>{etaSecondaryLabel}</Text> : null}
                 </View>
                 <TouchableOpacity style={[styles.metaItem, styles.metaItemTouchable]} activeOpacity={0.85} onPress={() => setShowCourierModal(true)}>
                   <View style={styles.riderTileRow}>
@@ -437,7 +489,7 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
               </View>
             ) : null}
 
-            {showTrackingMap && courierLocation && destinationLocation ? (
+            {showTrackingMap && courierDirections && courierDirectionCoordinates.length > 0 && activeDestination ? (
               <View style={styles.sectionCard}>
                 <View style={styles.sectionHeaderRow}>
                   <View style={styles.summaryTextWrap}>
@@ -445,7 +497,7 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
                     <Text style={styles.sectionSubtitle}>Live tracking will attach here once the courier is on the move.</Text>
                   </View>
                   <View style={styles.mapStatusPill}>
-                    <Text style={styles.mapStatusText}>{normalizedStage === 'pick_up_completed' ? 'On the way' : 'Assigned'}</Text>
+                    <Text style={styles.mapStatusText}>{courierDirections?.leg === 'delivery' ? 'On the way' : 'Heading to pickup'}</Text>
                   </View>
                 </View>
                 <View style={styles.mapWrap}>
@@ -453,17 +505,46 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
                     style={styles.map}
                     initialRegion={mapRegion || undefined}
                     region={mapRegion || undefined}
+                    mapPadding={{ top: 28, right: 28, bottom: 28, left: 28 }}
+                    {...baseMapProps}
                   >
-                    <Marker coordinate={courierLocation} pinColor={AUTH_COLORS.primary} />
-                    <Marker coordinate={{ latitude: destinationLocation.lat, longitude: destinationLocation.lng }} pinColor="#1B8A3F" />
                     <Polyline
-                      coordinates={[
-                        courierLocation,
-                        { latitude: destinationLocation.lat, longitude: destinationLocation.lng },
-                      ]}
-                      strokeColor={AUTH_COLORS.primary}
-                      strokeWidth={4}
+                      coordinates={courierDirectionCoordinates}
+                      strokeColor={MAP_COLORS.routeHalo}
+                      strokeWidth={12}
+                      lineCap="round"
+                      lineJoin="round"
                     />
+                    <Polyline
+                      coordinates={courierDirectionCoordinates}
+                      strokeColor={MAP_COLORS.routeCasing}
+                      strokeWidth={7}
+                      lineCap="round"
+                      lineJoin="round"
+                    />
+                    <Polyline
+                      coordinates={courierDirectionCoordinates}
+                      strokeColor={MAP_COLORS.route}
+                      strokeWidth={4}
+                      lineCap="round"
+                      lineJoin="round"
+                    />
+                    {activeCourierLocation ? (
+                      <Marker
+                        coordinate={activeCourierLocation}
+                        anchor={{ x: 0.5, y: 0.5 }}
+                      >
+                        <CourierMarker size={40} />
+                      </Marker>
+                    ) : null}
+                    {activeDestination ? (
+                      <Marker
+                        coordinate={activeDestination}
+                        anchor={DESTINATION_MARKER_ANCHOR}
+                      >
+                        <DestinationMarker size={36} />
+                      </Marker>
+                    ) : null}
                   </MapView>
                 </View>
               </View>
@@ -571,26 +652,28 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
               </View>
             </View>
 
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeaderRow}>
-                <View style={styles.summaryTextWrap}>
-                  <Text style={styles.sectionTitle}>Need help?</Text>
-                  <Text style={styles.sectionSubtitle}>If something went wrong, you can report it from here without leaving the page.</Text>
+            {isCompleted ? (
+              <View style={styles.sectionCard}>
+                <View style={styles.sectionHeaderRow}>
+                  <View style={styles.summaryTextWrap}>
+                    <Text style={styles.sectionTitle}>Need help?</Text>
+                    <Text style={styles.sectionSubtitle}>If something went wrong, you can report it from here without leaving the page.</Text>
+                  </View>
+                  <View style={styles.helpBadge}>
+                    <Text style={styles.helpBadgeText}>Optional</Text>
+                  </View>
                 </View>
-                <View style={styles.helpBadge}>
-                  <Text style={styles.helpBadgeText}>Optional</Text>
-                </View>
-              </View>
 
-              <TouchableOpacity style={styles.reportButton} activeOpacity={0.9} onPress={() => setIsReportModalVisible(true)}>
-                <Ionicons name="chatbox-ellipses-outline" size={18} color={AUTH_COLORS.text} />
-                <View style={styles.reportCopy}>
-                  <Text style={styles.reportTitle}>Report an issue</Text>
-                  <Text style={styles.reportSubtitle}>Use this for delays, damage, wrong items, or other delivery problems.</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={AUTH_COLORS.muted} />
-              </TouchableOpacity>
-            </View>
+                <TouchableOpacity style={styles.reportButton} activeOpacity={0.9} onPress={() => setIsReportModalVisible(true)}>
+                  <Ionicons name="chatbox-ellipses-outline" size={18} color={AUTH_COLORS.text} />
+                  <View style={styles.reportCopy}>
+                    <Text style={styles.reportTitle}>Report an issue</Text>
+                    <Text style={styles.reportSubtitle}>Use this for delays, damage, wrong items, or other delivery problems.</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={AUTH_COLORS.muted} />
+                </TouchableOpacity>
+              </View>
+            ) : null}
 
             {order.isPickedUp && !order.isOrderCompleted && (
               <TouchableOpacity
@@ -649,7 +732,8 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
           visible={isReportModalVisible}
           title="Report an issue"
           subtitle="Choose the complaint that fits best, add a short explanation, and include a photo if needed."
-          targetId={order.id}
+          relatedOrderId={order.id}
+          reportedPartyId={reportedPartyId}
           complaints={reportComplaints}
           onClose={() => setIsReportModalVisible(false)}
         />
@@ -791,6 +875,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: AUTH_COLORS.text,
+  },
+  metaHint: {
+    marginTop: 2,
+    fontSize: 11,
+    color: AUTH_COLORS.muted,
   },
   sectionCard: {
     backgroundColor: AUTH_COLORS.card,

@@ -75,8 +75,7 @@ export function parseWorkingHoursTime(value: string): number | null {
 	return hours * 60 + minutes;
 }
 
-export function checkWhetherStoreOpenedToday(workingHours: WorkingHours[]) {
-	const today = new Date();
+export function checkWhetherStoreOpenedToday(workingHours: WorkingHours[]) {	const today = new Date();
 	const dayName = today.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
 
 	for (const entry of workingHours) {
@@ -102,4 +101,81 @@ export function checkWhetherStoreOpenedToday(workingHours: WorkingHours[]) {
 	}
 
 	return false;
+}
+
+/**
+ * Parse a Google Routes duration into seconds.
+ * Handles protobuf Duration JSON ("1234s"), ISO-8601 ("PT1H2M3S") and numbers.
+ */
+export function parseRouteDurationSeconds(duration?: string | number | null): number | null {
+	if (duration === null || duration === undefined) {
+		return null;
+	}
+
+	if (typeof duration === 'number') {
+		return Number.isFinite(duration) ? duration : null;
+	}
+
+	const text = String(duration).trim();
+	if (!text) {
+		return null;
+	}
+
+	const secondsMatch = /^(\d+(?:\.\d+)?)s$/.exec(text);
+	if (secondsMatch) {
+		return Number(secondsMatch[1]);
+	}
+
+	const isoMatch = /^P(?:(\d+(?:\.\d+)?)D)?(?:T(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(text);
+	if (isoMatch) {
+		const days = Number(isoMatch[1] || 0);
+		const hours = Number(isoMatch[2] || 0);
+		const minutes = Number(isoMatch[3] || 0);
+		const seconds = Number(isoMatch[4] || 0);
+		return days * 86400 + hours * 3600 + minutes * 60 + seconds;
+	}
+
+	const parsed = Number(text);
+	return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Format a remaining duration as "8 min" / "1 hr 5 min". Empty string if unknown. */
+export function formatRouteDuration(duration?: string | number | null): string {
+	const seconds = parseRouteDurationSeconds(duration);
+	if (seconds === null || seconds < 0) {
+		return '';
+	}
+
+	const totalMinutes = Math.max(1, Math.round(seconds / 60));
+	if (totalMinutes < 60) {
+		return `${totalMinutes} min`;
+	}
+
+	const hours = Math.floor(totalMinutes / 60);
+	const minutes = totalMinutes % 60;
+	return minutes ? `${hours} hr ${minutes} min` : `${hours} hr`;
+}
+
+/** Estimated arrival clock time ("4:35 PM"). Empty string if unknown. */
+export function formatEtaArrival(duration?: string | number | null, now: Date = new Date()): string {
+	const seconds = parseRouteDurationSeconds(duration);
+	if (seconds === null || seconds < 0) {
+		return '';
+	}
+
+	const arrival = new Date(now.getTime() + seconds * 1000);
+	return arrival.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+/** Format a route distance as "800 m" / "1.2 km". Empty string if unknown. */
+export function formatRouteDistance(distanceMeters?: number | null): string {
+	if (distanceMeters === null || distanceMeters === undefined || !Number.isFinite(distanceMeters) || distanceMeters < 0) {
+		return '';
+	}
+
+	if (distanceMeters < 1000) {
+		return `${Math.round(distanceMeters)} m`;
+	}
+
+	return `${(distanceMeters / 1000).toFixed(1)} km`;
 }

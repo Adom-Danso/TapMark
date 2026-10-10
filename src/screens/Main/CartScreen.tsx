@@ -21,6 +21,8 @@ import { updateOneCartItem } from '@/functions/cart-items/update-cart-item-by-id
 import { clearActiveCartId } from '@/utils/cart';
 import { updateOneCart } from '@/functions/cart/update-one-cart';
 import ConfirmationModal from '@/components/ConfirmationModal';
+import { baseMapProps } from '@/theme/mapStyle';
+import DestinationMarker, { DESTINATION_MARKER_ANCHOR } from '@/components/DestinationMarker';
 
 const PAYMENT_METHODS = [
   { id: 'mobile-money', label: 'Mobile Money', icon: 'phone-portrait-outline' },
@@ -674,8 +676,13 @@ const CartScreen = () => {
           </Text>
           <TouchableOpacity activeOpacity={0.9} onPress={handleOpenMap} style={styles.mapPreview}>
             {isFocused && region && markerCoord ? (
-              <MapView style={styles.map} region={region} pointerEvents="none">
-                <Marker coordinate={markerCoord} pinColor={AUTH_COLORS.primary} />
+              <MapView style={styles.map} region={region} pointerEvents="none" {...baseMapProps}>
+                <Marker
+                  coordinate={markerCoord}
+                  anchor={DESTINATION_MARKER_ANCHOR}
+                >
+                  <DestinationMarker size={30} />
+                </Marker>
               </MapView>
             ) : (
               <View style={styles.map} />

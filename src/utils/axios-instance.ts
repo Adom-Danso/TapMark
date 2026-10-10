@@ -1,8 +1,23 @@
 import axios from 'axios';
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 import { getTokens, saveTokens } from '@/utils/tokens';
 import { handleUnauthorized } from '@/utils/logout';
 
+const APP_TYPE = 'regular'; // regular | seller | service_courier
+const APP_VERSION = Constants.expoConfig?.version ?? 'unknown';
+const APP_BUILD = String(
+    (Platform.OS === 'ios'
+        ? Constants.expoConfig?.ios?.buildNumber
+        : Constants.expoConfig?.android?.versionCode) ?? APP_VERSION
+);
+
+const newRequestId = (): string => {
+    const crypto = (globalThis as any).crypto;
+    if (crypto?.randomUUID) return crypto.randomUUID();
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+};
 
 export const axiosInstance = axios.create({
     baseURL: process.env.EXPO_PUBLIC_BACKEND_URL,
@@ -14,7 +29,10 @@ axiosInstance.interceptors.request.use(async config => {
     const { accessToken, refreshToken } = await getTokens();
 
     config.headers = config.headers ?? {};
-    config.headers['Content-Type'] = 'application/json';
+    // Do NOT force a JSON content-type here: axios sets application/json for
+    // object payloads automatically, and forcing it breaks multipart uploads
+    // (FormData) by serializing them to JSON. Mirrors the courier/seller apps.
+    // config.headers['Content-Type'] = 'application/json';
 
     if (accessToken) {
         config.headers.Authorization = `Bearer ${accessToken}`;
@@ -27,6 +45,13 @@ axiosInstance.interceptors.request.use(async config => {
     } else {
         delete config.headers['X-REFRESH-TOKEN'];
     }
+
+    config.headers['X-APP-TYPE'] = APP_TYPE;
+    config.headers['X-APP-VERSION'] = APP_VERSION;
+    config.headers['X-APP-BUILD'] = APP_BUILD;
+    config.headers['X-PLATFORM'] = Platform.OS;
+    config.headers['X-OS-VERSION'] = String(Platform.Version);
+    config.headers['X-REQUEST-ID'] = config.headers['X-REQUEST-ID'] ?? newRequestId();
 
     return config;
 });
