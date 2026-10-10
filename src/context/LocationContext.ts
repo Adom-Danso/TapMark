@@ -25,6 +25,8 @@ type LocationContextType = {
   setCurrentLocation: (location: LocationSchema) => void;
   addLocation: (location: LocationSchema) => void;
   getLocationName: (latitude: number, longitude: number, notify?: boolean) => Promise<string>;
+  /** Read-only device GPS fix. Never mutates `currentLocation`. */
+  getDeviceLocation: () => Promise<{ latitude: number; longitude: number } | null>;
 };
 
 const LocationContext = createContext<LocationContextType | null>(null);
@@ -96,6 +98,33 @@ export const LocationProvider = ({ children }: { children: React.ReactNode }) =>
     const name = await reverseGeocode(latitude, longitude, notify);
     return name || 'Unknown Location';
   };
+
+  /**
+   * Read-only counterpart to `requestLocation`: returns the device's GPS fix
+   * for callers that need to compare against where the user actually is,
+   * without overwriting the app's selected `currentLocation`.
+   */
+  const getDeviceLocation = useCallback(async (): Promise<{ latitude: number; longitude: number } | null> => {
+    try {
+      const position = await withTimeout(
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        LOCATE_TIMEOUT_MS,
+        'Location request timed out',
+      );
+      const { latitude, longitude } = position.coords;
+      if (!isValidCoords(latitude, longitude)) {
+        return null;
+      }
+      return { latitude, longitude };
+    } catch {
+      const lastKnown = await Location.getLastKnownPositionAsync().catch(() => null);
+      const coords = lastKnown?.coords;
+      if (!coords || !isValidCoords(coords.latitude, coords.longitude)) {
+        return null;
+      }
+      return { latitude: coords.latitude, longitude: coords.longitude };
+    }
+  }, []);
 
   const updateLocation = (location: LocationSchema) => {
     if (!isValidCoords(location.latitude, location.longitude)) {
@@ -243,8 +272,9 @@ export const LocationProvider = ({ children }: { children: React.ReactNode }) =>
       setCurrentLocation,
       addLocation,
       getLocationName,
+      getDeviceLocation,
     }),
-    [currentLocation, status, isLoading, isLocating, isResolvingName, recentLocations, requestLocation],
+    [currentLocation, status, isLoading, isLocating, isResolvingName, recentLocations, requestLocation, getDeviceLocation],
   );
 
   return React.createElement(LocationContext.Provider, { value: value as any }, children);

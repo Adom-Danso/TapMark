@@ -72,6 +72,15 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
 		});
 	}, [animatedScales, state.index, state.routes]);
 
+	// The map picker is a full-screen modal — hide the floating tab bar so it
+	// doesn't cover the bottom sheet.
+	const focusedTab = state.routes[state.index] as any;
+	const nestedRoutes = focusedTab?.state?.routes;
+	const nestedIndex = focusedTab?.state?.index ?? 0;
+	if (nestedRoutes?.[nestedIndex]?.name === 'MapPicker') {
+		return null;
+	}
+
 	return (
 		<View style={[styles.tabBarWrap, { paddingBottom: Math.max(insets.bottom, 10) }]}>
 			<View style={[styles.tabBar, { width: barWidth }]}>
