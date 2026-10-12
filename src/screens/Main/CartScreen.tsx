@@ -18,7 +18,6 @@ import { useProfile } from '@/context/ProfileContext';
 import { getCartInvoice } from '@/functions/cart/get-cart-invoice';
 import { CartInvoice } from '@/schemas/cart';
 import { updateOneCartItem } from '@/functions/cart-items/update-cart-item-by-id';
-import { clearActiveCartId } from '@/utils/cart';
 import { updateOneCart } from '@/functions/cart/update-one-cart';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import { baseMapProps } from '@/theme/mapStyle';
@@ -48,7 +47,7 @@ const CartScreen = () => {
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const { currentLocation, addLocation } = useLocation();
-  const { cartLines, updateCartLineQty, removeCartLine, updateCartLine, isLoading, activeCartId, updateCartLineItemAmount, refreshCart } = useCart();
+  const { cartLines, updateCartLineQty, removeCartLine, updateCartLine, isLoading, activeCartId, updateCartLineItemAmount, resetCart } = useCart();
   const { profileData, userWallet } = useProfile();
 
   const [instructions, setInstructions] = useState('');
@@ -69,8 +68,7 @@ const CartScreen = () => {
       }
 
       const response = await addOneTempOrder(payload);
-      clearActiveCartId();
-      refreshCart()
+      await resetCart();
       addLocation(currentLocation!);
       return response;
     },
@@ -119,11 +117,10 @@ const CartScreen = () => {
       const response = await updateOneCart(payload, activeCartId as string)
       return response
     },
-    onSuccess: (data) => {
-      clearActiveCartId();
+    onSuccess: async (data) => {
+      await resetCart();
       setConfirmationType("success")
       addLocation(currentLocation!);
-      refreshCart()
       setTimeout(() => {
         setConfirmationModalVisible(false);
       }, 200);

@@ -23,6 +23,7 @@ import { showToast } from '@/utils/notifications';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppStackParamList } from '@/schemas/shared';
 import { saveProfileData } from '@/utils/profile';
+import { clearActiveCartId } from '@/utils/cart';
 
 type LoginProps = NativeStackScreenProps<AppStackParamList, 'Login'>;
 
@@ -45,6 +46,9 @@ const LoginPage = ({ navigation }: LoginProps) => {
 				phone: response.data.phoneNumber,
 				otherNames: response.data.otherNames,
 			});
+
+			// Never resume a cart id left over from a previous session/user.
+			await clearActiveCartId();
 
 			if (response.data.userType === 'regular') {
 				navigation.reset({

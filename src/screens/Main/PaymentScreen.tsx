@@ -25,7 +25,6 @@ import { showToast } from '@/utils/notifications';
 import { checkPaymentStatus } from '@/functions/payments/check-payment-status';
 import { deleteOneTempOrder } from '@/functions/orders/delete-one-temp-order';
 import { updateOneCart } from '@/functions/cart/update-one-cart';
-import { clearActiveCartId } from '@/utils/cart';
 import { useLocation } from '@/context/LocationContext';
 
 const METHOD_TYPE_LABELS = {
@@ -127,7 +126,7 @@ const PaymentScreen = ({ route, navigation }: any) => {
   const { paymentMethods } = usePaymentMethods();
   const { addLocation, currentLocation } = useLocation()
   const { profileData } = useProfile()
-  const { activeCartId, refreshCart } = useCart()
+  const { activeCartId, resetCart } = useCart()
 
   // Get payment type from route params (passed from CartScreen)
   const { paymentType, tempOrderId, amountToPay } = route.params || {};
@@ -182,10 +181,9 @@ const PaymentScreen = ({ route, navigation }: any) => {
       const response = await updateOneCart(payload, activeCartId as string)
       return response
     },
-    onSuccess: (data) => {
-      clearActiveCartId();
+    onSuccess: async (data) => {
+      await resetCart();
       addLocation(currentLocation!);
-      refreshCart()
       setTimeout(() => {
         setConfirmationModalVisible(false);
         if (otpVerified) {

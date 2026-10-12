@@ -26,7 +26,7 @@ type OrdersScreenProps = NativeStackScreenProps<CartTabParamList, 'Orders'>;
 const OrdersScreen = ({route}: OrdersScreenProps) => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { addCartLine, clearCart } = useCart();
+  const { addCartLine, resetCart } = useCart();
   const { profileData } = useProfile();
   const {activeTabId} = route.params || {}
   const [activeTab, setActiveTab] = useState<'pending' | 'current' | 'past'>(activeTabId === null ? 'current': activeTabId);
@@ -142,8 +142,8 @@ const OrdersScreen = ({route}: OrdersScreenProps) => {
     navigation.navigate('OrderDetails', { orderId: order.id });
   };
 
-  const handleReorder = (order: Order) => {
-    clearCart();
+  const handleReorder = async (order: Order) => {
+    await resetCart();
 
     order.cart.cartItems.forEach((item) => {
       addCartLine({

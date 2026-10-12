@@ -1,5 +1,6 @@
 import { clearTokens } from '@/utils/tokens';
 import { clearProfileData } from '@/utils/profile';
+import { clearActiveCartId } from '@/utils/cart';
 import { navigationRef } from '@/navigation/navigationRef';
 
 // Flag to prevent redundant logout sequences from multiple concurrent triggers
@@ -15,6 +16,7 @@ export async function handleUnauthorized() {
         // Clear stored tokens and profile data
         await clearTokens();
         await clearProfileData();
+        await clearActiveCartId();
 
         // Reset navigation to the Welcome screen
         if (navigationRef.isReady()) {

@@ -5,11 +5,11 @@ import { updateOneCartItem } from '@/functions/cart-items/update-cart-item-by-id
 import { addOneCart } from '@/functions/cart/add-one-cart';
 import { getOneCartById } from '@/functions/cart/get-one-cart-by-id';
 import { CartItem, CartItemAddition } from '@/schemas/cart-items';
-import { getActiveCartId, saveActiveCartId } from '@/utils/cart';
+import { clearActiveCartId, getActiveCartId, saveActiveCartId } from '@/utils/cart';
 import { showToast } from '@/utils/notifications';
 import { generateImageUrl } from '@/utils/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useMemo, useRef, useState } from 'react';
 
 
 
@@ -42,6 +42,8 @@ type CartContextType = {
   removeCartLine: (cartLineId: string) => void;
   updateCartLineItemAmount: (cartLineId: string, amount: number) => void;
   clearCart: () => void;
+  resetCart: () => Promise<void>;
+  isResetting: boolean;
   parseMoney: (value: any) => number;
   refreshCart: ()=>void;
   isLoading: boolean;
@@ -115,6 +117,18 @@ const recalcLine = (line: any) => {
 export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const [cartLines, setCartLines] = useState<CartLineType[]>([]);
   const [activeCartId, setActiveCartId] = useState<string | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
+
+  // Keeps the current cart id available synchronously to mutations (avoids stale
+  // closures writing new items into a cart that has just been invalidated).
+  const activeCartIdRef = useRef<string | null>(null);
+  // Tracks an in-flight resetCart() so addCartLine can wait for it.
+  const resetPromiseRef = useRef<Promise<void> | null>(null);
+
+  const applyActiveCartId = (cartId: string | null) => {
+    activeCartIdRef.current = cartId;
+    setActiveCartId(cartId);
+  };
 
   async function fetchActiveCart() {
     const _activeCartId = await getActiveCartId();
@@ -122,7 +136,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
     if (!_activeCartId || _activeCartId === 'undefined' || _activeCartId === 'null') {
       const newCartResponse = await addOneCart();
       await saveActiveCartId(newCartResponse.data.id);
-      setActiveCartId(newCartResponse.data.id);
+      applyActiveCartId(newCartResponse.data.id);
       return (await getOneCartById(newCartResponse.data.id));
     }
 
@@ -132,18 +146,18 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
       if (response.data.isOrderCompleted) {
         const newCartResponse = await addOneCart();
         await saveActiveCartId(newCartResponse.data.id);
-        setActiveCartId(newCartResponse.data.id);
+        applyActiveCartId(newCartResponse.data.id);
         return (await getOneCartById(newCartResponse.data.id))
       }
 
-      setActiveCartId(_activeCartId);
+      applyActiveCartId(_activeCartId);
       return response.data;
     } catch (error: any) {
 
       if (error.statusCode === 404) {
         const newCartResponse = await addOneCart();
         await saveActiveCartId(newCartResponse.data.id);
-        setActiveCartId(newCartResponse.data.id);
+        applyActiveCartId(newCartResponse.data.id);
         return (await getOneCartById(newCartResponse.data.id));
       }
 
@@ -163,12 +177,13 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
 
   const addCartItemMutation = useMutation({
     mutationFn: async (payload: any) => {
-      if (!activeCartId) {
+      const cartId = activeCartIdRef.current;
+      if (!cartId) {
         throw new Error('No active cart');
       }
 
       const _response = await addOneCartItem({
-        cartId: activeCartId,
+        cartId,
         storeItemId: payload.itemId || payload.storeItemId,
         quantity: payload.quantity ?? payload.qty,
         itemAmount: payload.itemAmount ?? payload.basePrice ?? undefined,
@@ -226,18 +241,51 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
     fetchCartQuery.refetch()
   }
 
+  /**
+   * Drop the current cart and adopt a brand new, empty one. Used after an order
+   * is placed (and when reordering) so new items can never land in a cart that
+   * already belongs to an order.
+   */
+  const resetCart = async (): Promise<void> => {
+    setCartLines([]);
+    applyActiveCartId(null);
+    setIsResetting(true);
+
+    const work = (async () => {
+      await clearActiveCartId();
+      // With the stored id gone, fetchActiveCart creates and adopts a fresh cart.
+      await fetchCartQuery.refetch();
+    })();
+
+    resetPromiseRef.current = work;
+    try {
+      await work;
+    } finally {
+      resetPromiseRef.current = null;
+      setIsResetting(false);
+    }
+  }
+
   const isAdding = addCartItemMutation.isPending || false;
   const isRemoving = removeCartItemMutation.isPending || false;
   const isLoading = fetchCartQuery.isLoading || updateCartItemMutation.isPending || isAdding || isRemoving;
 
   const addCartLine = (payload: any) => {
-    if (!activeCartId) {
-      refreshCart();
-    }
+    const enqueue = async () => {
+      // Wait out any in-flight reset so we never write into the old cart.
+      if (resetPromiseRef.current) {
+        await resetPromiseRef.current;
+      }
+      if (!activeCartIdRef.current) {
+        await refreshCart();
+      }
 
-    for (let i = 0; i < (payload.packageQty || 1); i++) {
-      addCartItemMutation.mutate(payload);
-    }
+      for (let i = 0; i < (payload.packageQty || 1); i++) {
+        addCartItemMutation.mutate(payload);
+      }
+    };
+
+    void enqueue();
   };
 
   const updateCartLineQty = (cartLineId: string, delta: number) => {
@@ -245,23 +293,12 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
     if (lineToUpdate) {
       updateCartItemMutation.mutate({ id: cartLineId, updates: { quantity: lineToUpdate.qty + delta } })
     }
-    // setCartLines((prev) =>
-    //   prev.map((line) =>
-    //     line.cartLineId === cartLineId ? recalcLine({ ...line, qty: line.qty + delta }) : line
-    //   )
-    // );
   };
   const updateCartLineItemAmount = (cartLineId: string, amount: number) => {
     const lineToUpdate = cartLines.find(value => value.cartLineId == cartLineId)
     if (lineToUpdate) {
       updateCartItemMutation.mutate({ id: cartLineId, updates: { itemAmount: amount } })
     }
-
-    // setCartLines((prev) =>
-    //   prev.map((line) =>
-    //     line.cartLineId === cartLineId ? recalcLine({ ...line, qty: line.qty + delta }) : line
-    //   )
-    // );
   };
 
   const removeCartLine = (cartLineId: string) => {
@@ -325,11 +362,13 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
       updateCartLineExtras,
       removeCartLine,
       clearCart,
+      resetCart,
+      isResetting,
       parseMoney,
       isLoading,
       refreshCart,
     }),
-    [cartLines, subtotal, totalItems, isAdding, isLoading]
+    [cartLines, subtotal, totalItems, isAdding, isLoading, activeCartId, isResetting]
   );
 
   return React.createElement(CartContext.Provider, { value: value as any }, children);
