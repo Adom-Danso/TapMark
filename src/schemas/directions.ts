@@ -11,4 +11,5 @@ export type GoogleRoute = {
     leg?: RouteLeg | null;
     destination?: { lat: number; lng: number } | null;
     courierLocation?: { lat: number; lng: number } | null;
+    path?: { lat: number; lng: number }[] | null;
 }

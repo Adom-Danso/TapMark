@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View, TouchableOpacity, Modal, Linking, Image, Animated, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute } from '@react-navigation/native';
@@ -23,6 +23,12 @@ import { getCourierLocation } from '@/functions/directions/get-courier-location'
 import { getOneOrderOtp } from '@/functions/verifications/get-one-order-otp';
 import { GoogleRoute } from '@/schemas/directions';
 import { baseMapProps, MAP_COLORS } from '@/theme/mapStyle';
+import {
+  animateAlongCoordinates,
+  distanceMeters,
+  getPathDistanceMeters,
+} from '@/utils/coordinate-animation';
+import type { LatLng } from '@/utils/coordinate-animation';
 import CourierMarker from '@/components/CourierMarker';
 import DestinationMarker, { DESTINATION_MARKER_ANCHOR } from '@/components/DestinationMarker';
 
@@ -132,6 +138,9 @@ const TimelineStep = ({ stepKey, isActive, isComplete, isLast }: { stepKey: Time
 
 const ANIMATION_DURATION = 220;
 
+// Rough cycling speed used to pace the marker between location batches.
+const COURIER_ANIMATION_SPEED_MPS = 2.5;
+
 
 const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
   const route = useRoute<any>();
@@ -145,6 +154,10 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
   const [deliveryAddressName, setDeliveryAddressName] = useState<string>('Loading address...');
   const [courierDirections, setCourierDirections] = useState<GoogleRoute | null>(null);
   const [courierDirectionCoordinates, setCourierDirectionCoordinates] = useState<{ latitude: number; longitude: number }[]>([]);
+  const [animatedCourierLocation, setAnimatedCourierLocation] = useState<LatLng | null>(null);
+  const animatedCourierLocationRef = useRef<LatLng | null>(null);
+  const animationCancelRef = useRef<(() => void) | null>(null);
+  const lastPathSignatureRef = useRef<string>('');
   const normalizedStage = normaliseOrderStage(order as Order | undefined);
   const activeStepIndex = getTimelineStepIndex(normalizedStage);
   const isCompleted = normalizedStage === 'completed';
@@ -156,9 +169,25 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
     : destinationLocation
       ? { latitude: destinationLocation.lat, longitude: destinationLocation.lng }
       : null;
-  const activeCourierLocation = courierDirections?.courierLocation
-    ? { latitude: courierDirections.courierLocation.lat, longitude: courierDirections.courierLocation.lng }
-    : courierDirectionCoordinates[0] ?? null;
+  const pathCoordinates = useMemo<LatLng[]>(
+    () => (courierDirections?.path ?? []).map((point) => ({ latitude: point.lat, longitude: point.lng })),
+    [courierDirections?.path],
+  );
+  const activeCourierLocation = animatedCourierLocation
+    ?? (courierDirections?.courierLocation
+      ? { latitude: courierDirections.courierLocation.lat, longitude: courierDirections.courierLocation.lng }
+      : courierDirectionCoordinates[0] ?? null);
+  // Small connector between the gliding marker and the route start, so the two
+  // never visually separate while the marker is catching up to the newest fix.
+  const markerConnectorCoordinates = useMemo(() => {
+    if (!animatedCourierLocation || courierDirectionCoordinates.length === 0) {
+      return [];
+    }
+    if (distanceMeters(animatedCourierLocation, courierDirectionCoordinates[0]) <= 1) {
+      return [];
+    }
+    return [animatedCourierLocation, courierDirectionCoordinates[0]];
+  }, [animatedCourierLocation, courierDirectionCoordinates]);
   const activeRoute = courierDirections?.routes?.[0];
   const etaDurationLabel = activeRoute ? formatRouteDuration(activeRoute.duration) : '';
   const etaArrivalLabel = activeRoute ? formatEtaArrival(activeRoute.duration) : '';
@@ -168,7 +197,9 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
     : '—';
   const etaSecondaryLabel = etaDistanceLabel ? `${etaDistanceLabel} away` : '';
   const mapRegion = useMemo(() => {
-    if (!courierDirectionCoordinates.length || !activeDestination) {
+    const points = [...courierDirectionCoordinates, ...pathCoordinates];
+
+    if (!points.length || !activeDestination) {
       return null;
     }
 
@@ -177,7 +208,7 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
     let minLongitude = activeDestination.longitude;
     let maxLongitude = activeDestination.longitude;
 
-    for (const point of courierDirectionCoordinates) {
+    for (const point of points) {
       minLatitude = Math.min(minLatitude, point.latitude);
       maxLatitude = Math.max(maxLatitude, point.latitude);
       minLongitude = Math.min(minLongitude, point.longitude);
@@ -190,7 +221,7 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
       latitudeDelta: Math.max((maxLatitude - minLatitude) * 1.4, 0.01),
       longitudeDelta: Math.max((maxLongitude - minLongitude) * 1.4, 0.01),
     };
-  }, [courierDirectionCoordinates, courierDirections, destinationLocation]);
+  }, [courierDirectionCoordinates, pathCoordinates, courierDirections, destinationLocation]);
   const [showCourierModal, setShowCourierModal] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [otpCode, setOtpCode] = useState<OTPCode | null>(null);
@@ -218,16 +249,65 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
     enabled: shouldFetchCourierLocation,
     refetchInterval: 5000,
   })
-  React.useEffect(()=>{
-    if (fetchCourierLocationQuery.status == "success" && fetchCourierLocationQuery.data) {
-      setCourierDirections(fetchCourierLocationQuery.data)
-
-      if (fetchCourierLocationQuery.data.routes.length > 0) {
-        const encodedPolyline = fetchCourierLocationQuery.data.routes[0].polyline.encodedPolyline
-        setCourierDirectionCoordinates(decode(encodedPolyline).map(([lat, lng]) => ({ latitude: lat, longitude: lng })))
-      }
+  React.useEffect(() => {
+    if (fetchCourierLocationQuery.status !== "success" || !fetchCourierLocationQuery.data) {
+      return;
     }
+
+    const data = fetchCourierLocationQuery.data;
+    setCourierDirections(data);
+
+    if (data.routes.length > 0) {
+      const encodedPolyline = data.routes[0].polyline.encodedPolyline;
+      setCourierDirectionCoordinates(decode(encodedPolyline).map(([lat, lng]) => ({ latitude: lat, longitude: lng })));
+    }
+
+    const path = (data.path ?? []).map((point) => ({ latitude: point.lat, longitude: point.lng }));
+    const target = data.courierLocation
+      ? { latitude: data.courierLocation.lat, longitude: data.courierLocation.lng }
+      : path[path.length - 1] ?? null;
+
+    if (!target) {
+      return;
+    }
+
+    // The backend returns the same latest batch until the courier reports
+    // again, so only animate when the batch or current fix actually changed.
+    const signature = [
+      path.map((point) => `${point.latitude.toFixed(5)},${point.longitude.toFixed(5)}`).join('|'),
+      `${target.latitude.toFixed(5)},${target.longitude.toFixed(5)}`,
+    ].join('#');
+
+    if (signature === lastPathSignatureRef.current) {
+      return;
+    }
+    lastPathSignatureRef.current = signature;
+
+    const start = animatedCourierLocationRef.current ?? path[0] ?? target;
+    const through = [...path, target];
+    const distance = getPathDistanceMeters([start, ...through]);
+    const durationMs = Math.max(800, Math.min(15000, (distance / COURIER_ANIMATION_SPEED_MPS) * 1000));
+
+    animationCancelRef.current?.();
+    animationCancelRef.current = animateAlongCoordinates({
+      from: start,
+      through,
+      durationMs,
+      onFrame: (coordinate) => {
+        animatedCourierLocationRef.current = coordinate;
+        setAnimatedCourierLocation(coordinate);
+      },
+      onDone: () => {
+        animatedCourierLocationRef.current = target;
+        setAnimatedCourierLocation(target);
+        animationCancelRef.current = null;
+      },
+    });
   }, [fetchCourierLocationQuery.status, fetchCourierLocationQuery.data])
+
+  React.useEffect(() => () => {
+    animationCancelRef.current?.();
+  }, [])
 
 
   const fetchOneOrderQuery = useQuery({
@@ -508,6 +588,42 @@ const OrderDetailsScreen = ({ navigation }: { navigation: any }) => {
                     mapPadding={{ top: 28, right: 28, bottom: 28, left: 28 }}
                     {...baseMapProps}
                   >
+                    {pathCoordinates.length > 1 ? (
+                      <Polyline
+                        coordinates={pathCoordinates}
+                        strokeColor={MAP_COLORS.routeHalo}
+                        strokeWidth={5}
+                        lineCap="round"
+                        lineJoin="round"
+                      />
+                    ) : null}
+                    {markerConnectorCoordinates.length > 1 ? (
+                      <Polyline
+                        coordinates={markerConnectorCoordinates}
+                        strokeColor={MAP_COLORS.routeHalo}
+                        strokeWidth={12}
+                        lineCap="round"
+                        lineJoin="round"
+                      />
+                    ) : null}
+                    {markerConnectorCoordinates.length > 1 ? (
+                      <Polyline
+                        coordinates={markerConnectorCoordinates}
+                        strokeColor={MAP_COLORS.routeCasing}
+                        strokeWidth={7}
+                        lineCap="round"
+                        lineJoin="round"
+                      />
+                    ) : null}
+                    {markerConnectorCoordinates.length > 1 ? (
+                      <Polyline
+                        coordinates={markerConnectorCoordinates}
+                        strokeColor={MAP_COLORS.route}
+                        strokeWidth={4}
+                        lineCap="round"
+                        lineJoin="round"
+                      />
+                    ) : null}
                     <Polyline
                       coordinates={courierDirectionCoordinates}
                       strokeColor={MAP_COLORS.routeHalo}
